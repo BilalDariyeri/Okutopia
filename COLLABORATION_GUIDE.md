@@ -1,6 +1,5 @@
 # Ortak Geliştirme Rehberi
-
-Bu rehber, 4 kişilik ekibin sorunsuz bir şekilde birlikte çalışması için hazırlanmıştır.
+GENCLERRRRRR GELİSTİRMEYE DEVAM.
 
 ## 🚀 Hızlı Başlangıç
 
