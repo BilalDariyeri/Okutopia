@@ -1,0 +1,24 @@
+# <type>: <subject>
+# 
+# <body>
+# 
+# <footer>
+
+# Type'lar:
+# feat: Yeni özellik
+# fix: Bug düzeltmesi
+# docs: Dokümantasyon
+# style: Formatting (kod değişikliği yok)
+# refactor: Kod iyileştirmesi
+# test: Test ekleme/düzeltme
+# chore: Build, config değişiklikleri
+
+# Örnek:
+# feat: kullanıcı profil sayfası eklendi
+# 
+# - Profil görüntüleme özelliği eklendi
+# - Profil düzenleme formu eklendi
+# - Avatar yükleme özelliği eklendi
+# 
+# Closes #123
+
