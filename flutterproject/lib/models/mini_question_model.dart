@@ -1,6 +1,7 @@
 class MiniQuestion {
   final String id;
-  final String activityId;
+  final String? activityId; // Artık optional - etkinlik veya ders bağlantısı
+  final String? lessonId; // Yeni: ders bağlantısı
   final String questionType; // Image, Audio, Video, Drawing, Text
   final String? mediaFileId;
   final String? mediaUrl;
@@ -11,7 +12,8 @@ class MiniQuestion {
 
   MiniQuestion({
     required this.id,
-    required this.activityId,
+    this.activityId,
+    this.lessonId,
     required this.questionType,
     this.correctAnswer,
     this.mediaFileId,
@@ -24,9 +26,16 @@ class MiniQuestion {
   factory MiniQuestion.fromJson(Map<String, dynamic> json) {
     return MiniQuestion(
       id: json['_id'] ?? json['id'] ?? '',
-      activityId: json['activity'] is String
-          ? json['activity']
-          : json['activity']?['_id'] ?? json['activity']?['id'] ?? '',
+      activityId: json['activity'] != null
+          ? (json['activity'] is String
+              ? json['activity']
+              : json['activity']?['_id'] ?? json['activity']?['id'] ?? '')
+          : null,
+      lessonId: json['lesson'] != null
+          ? (json['lesson'] is String
+              ? json['lesson']
+              : json['lesson']?['_id'] ?? json['lesson']?['id'] ?? '')
+          : null,
       questionType: json['questionType'] ?? 'Text',
       correctAnswer: json['correctAnswer'],
       mediaFileId: json['mediaFileId'],
@@ -41,6 +50,7 @@ class MiniQuestion {
     return {
       '_id': id,
       'activity': activityId,
+      'lesson': lessonId,
       'questionType': questionType,
       'correctAnswer': correctAnswer,
       'mediaFileId': mediaFileId,

@@ -35,7 +35,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.currentQuestionIndex;
-    
+
     // Ses çalma tamamlandığında dinle
     _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
@@ -62,7 +62,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
   Future<void> _playAudio(String? fileId) async {
     if (fileId == null) return;
-    
+
     // Eğer zaten çalıyorsa, durdur
     if (_isPlayingAudio) {
       await _audioPlayer.stop();
@@ -71,17 +71,17 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isPlayingAudio = true;
     });
 
     try {
       final url = _getFileUrl(fileId);
-      
+
       // Önce mevcut sesi durdur
       await _audioPlayer.stop();
-      
+
       // Yeni sesi çal
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
@@ -99,26 +99,45 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
   }
 
-  void _handleAnswer(bool answer) {
+  void _selectAnswer(bool answer) {
     if (_hasAnswered) return;
 
     setState(() {
-      _hasAnswered = true;
       _userAnswer = answer;
-      
+    });
+    
+    // Direkt kaydet
+    _saveAnswer();
+  }
+
+  void _saveAnswer() {
+    if (_hasAnswered || _userAnswer == null) return;
+
+    setState(() {
+      _hasAnswered = true;
+
       final question = widget.questions[_currentIndex];
       final correctAnswer = question.correctAnswer?.toLowerCase().trim();
-      
+
       // Cevap kontrolü (Evet/Hayır veya true/false)
       bool isCorrect = false;
       if (correctAnswer != null) {
-        if (answer && (correctAnswer == 'evet' || correctAnswer == 'yes' || correctAnswer == 'true' || correctAnswer == '✓')) {
+        if (_userAnswer == true &&
+            (correctAnswer == 'evet' ||
+                correctAnswer == 'yes' ||
+                correctAnswer == 'true' ||
+                correctAnswer == '✓')) {
           isCorrect = true;
-        } else if (!answer && (correctAnswer == 'hayır' || correctAnswer == 'no' || correctAnswer == 'false' || correctAnswer == '✗' || correctAnswer == 'x')) {
+        } else if (_userAnswer == false &&
+            (correctAnswer == 'hayır' ||
+                correctAnswer == 'no' ||
+                correctAnswer == 'false' ||
+                correctAnswer == '✗' ||
+                correctAnswer == 'x')) {
           isCorrect = true;
         }
       }
-      
+
       if (isCorrect) {
         _score++;
       }
@@ -126,13 +145,13 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
     // 2 saniye sonra bir sonraki soruya geç
     Timer(const Duration(seconds: 2), () {
-      if (_currentIndex < widget.questions.length - 1) {
+      if (mounted && _currentIndex < widget.questions.length - 1) {
         setState(() {
           _currentIndex++;
           _hasAnswered = false;
           _userAnswer = null;
         });
-      } else {
+      } else if (mounted) {
         // Tüm sorular bitti
         _showCompletionDialog();
       }
@@ -145,7 +164,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Tebrikler!'),
-        content: Text('Tüm soruları tamamladınız!\nPuanınız: $_score/${widget.questions.length}'),
+        content: Text(
+          'Tüm soruları tamamladınız!\nPuanınız: $_score/${widget.questions.length}',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -162,14 +183,15 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   String _getQuestionText(MiniQuestion question) {
     // data objesinden soru metnini al
     if (question.data != null) {
-      final questionText = question.data!['questionText'] ?? 
-                          question.data!['text'] ?? 
-                          question.data!['soru'];
+      final questionText =
+          question.data!['questionText'] ??
+          question.data!['text'] ??
+          question.data!['soru'];
       if (questionText != null) {
         return questionText.toString();
       }
     }
-    
+
     // Varsayılan soru metni
     return 'Resme bak! Kelime içinde "a" harfi var mı?';
   }
@@ -177,14 +199,15 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   String _getInstructionText(MiniQuestion question) {
     // data objesinden açıklama metnini al
     if (question.data != null) {
-      final instruction = question.data!['instruction'] ?? 
-                         question.data!['aciklama'] ??
-                         question.data!['description'];
+      final instruction =
+          question.data!['instruction'] ??
+          question.data!['aciklama'] ??
+          question.data!['description'];
       if (instruction != null) {
         return instruction.toString();
       }
     }
-    
+
     // Varsayılan açıklama
     return 'Önce "Sesi Hisset" butonuna tıkla, sonra kelime içinde "a" harfi varsa tik (✓), yoksa çarpı (✗) butonuna tıkla!';
   }
@@ -206,7 +229,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     final questionText = _getQuestionText(question);
     final instructionText = _getInstructionText(question);
     final imageFileId = question.mediaFileId;
-    final audioFileId = question.data?['audioFileId'] ?? question.mediaFileId; // Ses dosyası ID'si
+    final audioFileId =
+        question.data?['audioFileId'] ??
+        question.mediaFileId; // Ses dosyası ID'si
 
     return Scaffold(
       body: Container(
@@ -226,7 +251,10 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             children: [
               // Üst Header (Pembe-mor gradient)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -264,7 +292,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                   ],
                 ),
               ),
-              
+
               // Soru Numarası
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -277,7 +305,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                   ),
                 ),
               ),
-              
+
               // Ana İçerik
               Expanded(
                 child: Row(
@@ -306,18 +334,21 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                                       ? CachedNetworkImage(
                                           imageUrl: _getFileUrl(imageFileId),
                                           fit: BoxFit.contain,
-                                          placeholder: (context, url) => const Center(
-                                            child: CircularProgressIndicator(
-                                              color: Color(0xFF4FC3F7),
-                                            ),
-                                          ),
-                                          errorWidget: (context, url, error) => const Center(
-                                            child: Icon(
-                                              Icons.image_not_supported,
-                                              size: 64,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
+                                          placeholder: (context, url) =>
+                                              const Center(
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: Color(0xFF4FC3F7),
+                                                    ),
+                                              ),
+                                          errorWidget: (context, url, error) =>
+                                              const Center(
+                                                child: Icon(
+                                                  Icons.image_not_supported,
+                                                  size: 64,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
                                         )
                                       : const Center(
                                           child: Icon(
@@ -330,12 +361,14 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            
+
                             // "Sesi Hisset" Butonu
                             if (audioFileId != null)
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
@@ -348,19 +381,26 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                                 child: Material(
                                   color: Colors.transparent,
                                   child: InkWell(
-                                    onTap: _isPlayingAudio ? null : () => _playAudio(audioFileId),
+                                    onTap: _isPlayingAudio
+                                        ? null
+                                        : () => _playAudio(audioFileId),
                                     borderRadius: BorderRadius.circular(12),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Icon(
-                                          _isPlayingAudio ? Icons.pause : Icons.music_note,
+                                          _isPlayingAudio
+                                              ? Icons.pause
+                                              : Icons.music_note,
                                           color: Colors.white,
                                           size: 24,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          _isPlayingAudio ? 'Çalıyor...' : 'Sesi Hisset',
+                                          _isPlayingAudio
+                                              ? 'Çalıyor...'
+                                              : 'Sesi Hisset',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 18,
@@ -376,7 +416,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                         ),
                       ),
                     ),
-                    
+
                     // Sağ Taraf: Soru ve Butonlar
                     Expanded(
                       flex: 2,
@@ -401,69 +441,117 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                                 ),
                               ),
                             ),
-                            
+
                             const SizedBox(height: 24),
-                            
+
                             // Cevap Butonları
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
                                 // Evet Butonu (Yeşil ✓)
-                                GestureDetector(
-                                  onTap: _hasAnswered ? null : () => _handleAnswer(true),
-                                  child: Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      color: _hasAnswered && _userAnswer == true
-                                          ? (_userAnswer == true && question.correctAnswer?.toLowerCase().contains('evet') == true
-                                              ? Colors.green
-                                              : Colors.red)
-                                          : Colors.green,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 3,
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _hasAnswered
+                                        ? null
+                                        : () => _selectAnswer(true),
+                                    borderRadius: BorderRadius.circular(40),
+                                    child: Opacity(
+                                      opacity:
+                                          _hasAnswered && _userAnswer != true
+                                          ? 0.5
+                                          : 1.0,
+                                      child: Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              _hasAnswered &&
+                                                  _userAnswer == true
+                                              ? (_userAnswer == true &&
+                                                        question.correctAnswer
+                                                                ?.toLowerCase()
+                                                                .contains(
+                                                                  'evet',
+                                                                ) ==
+                                                            true
+                                                    ? Colors.green
+                                                    : Colors.red)
+                                              : (_userAnswer == true
+                                                    ? Colors.green.shade700
+                                                    : Colors.green),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: _userAnswer == true
+                                                ? Colors.yellow
+                                                : Colors.white,
+                                            width: _userAnswer == true ? 4 : 3,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 40,
+                                        ),
                                       ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.check,
-                                      color: Colors.white,
-                                      size: 40,
                                     ),
                                   ),
                                 ),
-                                
+
                                 // Hayır Butonu (Kırmızı ✗)
-                                GestureDetector(
-                                  onTap: _hasAnswered ? null : () => _handleAnswer(false),
-                                  child: Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      color: _hasAnswered && _userAnswer == false
-                                          ? (_userAnswer == false && question.correctAnswer?.toLowerCase().contains('hayır') == true
-                                              ? Colors.green
-                                              : Colors.red)
-                                          : Colors.red,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 3,
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _hasAnswered
+                                        ? null
+                                        : () => _selectAnswer(false),
+                                    borderRadius: BorderRadius.circular(40),
+                                    child: Opacity(
+                                      opacity:
+                                          _hasAnswered && _userAnswer != false
+                                          ? 0.5
+                                          : 1.0,
+                                      child: Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              _hasAnswered &&
+                                                  _userAnswer == false
+                                              ? (_userAnswer == false &&
+                                                        question.correctAnswer
+                                                                ?.toLowerCase()
+                                                                .contains(
+                                                                  'hayır',
+                                                                ) ==
+                                                            true
+                                                    ? Colors.green
+                                                    : Colors.red)
+                                              : (_userAnswer == false
+                                                    ? Colors.red.shade700
+                                                    : Colors.red),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: _userAnswer == false
+                                                ? Colors.yellow
+                                                : Colors.white,
+                                            width: _userAnswer == false ? 4 : 3,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 40,
+                                        ),
                                       ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.close,
-                                      color: Colors.white,
-                                      size: 40,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            
+
                             const SizedBox(height: 24),
-                            
+
                             // Açıklama Metni
                             Container(
                               padding: const EdgeInsets.all(16),
@@ -493,4 +581,3 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     );
   }
 }
-

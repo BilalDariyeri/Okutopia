@@ -251,7 +251,48 @@ exports.getQuestionsForActivity = async (req, res) => {
     }
 };
 
-// 10b. Bir Gruba Ait Tüm Soruları Getirme
+// 10b. Bir Derse Ait Tüm Soruları Getirme
+// 💡 YENİ: Ders seviyesinde sorular için
+exports.getQuestionsForLesson = async (req, res) => {
+    try {
+        const { lessonId } = req.params;
+        
+        // 💡 PERFORMANS: Pagination desteği
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const skip = (page - 1) * limit;
+        const actualLimit = Math.min(limit, 100);
+        
+        const questions = await MiniQuestion.find({ 
+            lesson: lessonId,
+            questionLevel: 'Lesson' // Sadece ders seviyesindeki sorular
+        })
+            .lean()
+            .skip(skip)
+            .limit(actualLimit)
+            .sort({ createdAt: 1 });
+        
+        const total = await MiniQuestion.countDocuments({ 
+            lesson: lessonId,
+            questionLevel: 'Lesson'
+        });
+        
+        res.status(200).json({
+            success: true,
+            questions,
+            pagination: {
+                page,
+                limit: actualLimit,
+                total,
+                pages: Math.ceil(total / actualLimit)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Sorular çekilemedi.', error: error.message });
+    }
+};
+
+// 10c. Bir Gruba Ait Tüm Soruları Getirme
 // 💡 YENİ: Grup seviyesinde sorular için
 exports.getQuestionsForGroup = async (req, res) => {
     try {
@@ -292,7 +333,7 @@ exports.getQuestionsForGroup = async (req, res) => {
     }
 };
 
-// 10c. Bir Soruya Ait Nested Soruları Getirme
+// 10d. Bir Soruya Ait Nested Soruları Getirme
 // 💡 YENİ: İç içe sorular için
 exports.getNestedQuestions = async (req, res) => {
     try {

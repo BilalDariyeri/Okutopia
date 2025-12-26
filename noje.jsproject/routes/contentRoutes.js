@@ -194,6 +194,25 @@ router.get('/activities/:activityId/questions', contentController.getQuestionsFo
 
 /**
  * @swagger
+ * /api/content/lessons/{lessonId}/questions:
+ *   get:
+ *     summary: Bir derse ait tüm soruları getirme
+ *     tags: [Content]
+ *     parameters:
+ *       - in: path
+ *         name: lessonId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Ders ID'si
+ *     responses:
+ *       '200':
+ *         description: Sorular başarıyla getirildi.
+ */
+router.get('/lessons/:lessonId/questions', contentController.getQuestionsForLesson);
+
+/**
+ * @swagger
  * /api/content/groups/{groupId}/questions:
  *   get:
  *     summary: Bir gruba ait tüm soruları getirme

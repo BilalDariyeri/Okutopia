@@ -1513,6 +1513,7 @@ exports.createQuestion = async (req, res) => {
     try {
         const { 
             activity, 
+            lesson,
             group, 
             parentQuestion, 
             questionType,
@@ -1526,11 +1527,11 @@ exports.createQuestion = async (req, res) => {
             mediaStorage 
         } = req.body;
 
-        // 💡 ESNEK YAPI: En az bir ilişki olmalı (activity, group veya parentQuestion)
-        if (!activity && !group && !parentQuestion) {
+        // Validation: En az activity veya lesson olmalı
+        if (!activity && !lesson) {
             return res.status(400).json({
                 success: false,
-                message: 'Soru en az bir seviyeye bağlı olmalıdır (activity, group veya parentQuestion).'
+                message: 'Soru en az bir seviyeye bağlı olmalıdır. Activity veya lesson\'dan en az biri zorunludur.'
             });
         }
 
@@ -1570,6 +1571,7 @@ exports.createQuestion = async (req, res) => {
                 questionType: finalQuestionType,
                 questionFormat: finalQuestionType,
                 activity,
+                lesson,
                 group,
                 parentQuestion,
                 correctAnswer,
@@ -1585,6 +1587,7 @@ exports.createQuestion = async (req, res) => {
             console.warn('Strategy bulunamadı, eski format kullanılıyor:', strategyError.message);
             normalizedQuestionData = {
                 activity,
+                lesson,
                 group,
                 parentQuestion,
                 questionType: finalQuestionType,
@@ -1611,6 +1614,18 @@ exports.createQuestion = async (req, res) => {
             }
         }
 
+        // Ders var mı kontrol et (eğer lesson varsa)
+        if (lesson) {
+            const Lesson = require('../models/lesson');
+            const lessonExists = await Lesson.findById(lesson);
+            if (!lessonExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Seçilen ders bulunamadı.'
+                });
+            }
+        }
+
         // Grup var mı kontrol et (eğer group varsa)
         if (group) {
             const groupExists = await Group.findById(group);
@@ -1633,14 +1648,20 @@ exports.createQuestion = async (req, res) => {
             }
         }
 
-        // Question level'ı otomatik belirle
+        // Validation: En az activity veya lesson olmalı
+        if (!normalizedQuestionData.activity && !normalizedQuestionData.lesson) {
+            return res.status(400).json({
+                success: false,
+                message: 'Soru en az bir seviyeye bağlı olmalıdır. Activity veya lesson\'dan en az biri zorunludur.'
+            });
+        }
+
+        // Question level'ı otomatik belirle (öncelik: Activity > Lesson)
         let questionLevel = 'Activity'; // Varsayılan
-        if (normalizedQuestionData.group) {
-            questionLevel = 'Group';
-        } else if (normalizedQuestionData.activity) {
+        if (normalizedQuestionData.activity) {
             questionLevel = 'Activity';
-        } else if (normalizedQuestionData.parentQuestion) {
-            questionLevel = 'Nested';
+        } else if (normalizedQuestionData.lesson) {
+            questionLevel = 'Lesson';
         }
 
         // mediaFiles array'ini hazırla (normalize edilmiş veriden)
@@ -1658,8 +1679,7 @@ exports.createQuestion = async (req, res) => {
 
         const question = await MiniQuestion.create({
             activity: normalizedQuestionData.activity || null,
-            group: normalizedQuestionData.group || null,
-            parentQuestion: normalizedQuestionData.parentQuestion || null,
+            lesson: normalizedQuestionData.lesson || null,
             questionLevel: questionLevel,
             questionType: normalizedQuestionData.questionType,
             correctAnswer: normalizedQuestionData.correctAnswer ? 
@@ -1696,7 +1716,7 @@ exports.createQuestion = async (req, res) => {
 exports.updateQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const { activity, questionType, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage } = req.body;
+        const { activity, lesson, questionType, questionFormat, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage } = req.body;
 
         // Soru var mı kontrol et
         const existingQuestion = await MiniQuestion.findById(id);
@@ -1718,6 +1738,29 @@ exports.updateQuestion = async (req, res) => {
             }
         }
 
+        // Ders var mı kontrol et (eğer değiştiriliyorsa)
+        if (lesson) {
+            const Lesson = require('../models/lesson');
+            const lessonExists = await Lesson.findById(lesson);
+            if (!lessonExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Seçilen ders bulunamadı.'
+                });
+            }
+        }
+
+        // Validation: Güncelleme sonrası en az activity veya lesson olmalı
+        const finalActivity = activity !== undefined ? activity : existingQuestion.activity;
+        const finalLesson = lesson !== undefined ? lesson : existingQuestion.lesson;
+        
+        if (!finalActivity && !finalLesson) {
+            return res.status(400).json({
+                success: false,
+                message: 'Soru en az bir seviyeye bağlı olmalıdır. Activity veya lesson\'dan en az biri zorunludur.'
+            });
+        }
+
         // mediaFiles array'ini hazırla (birden fazla medya dosyası için)
         let processedMediaFiles = [];
         if (mediaFiles && Array.isArray(mediaFiles) && mediaFiles.length > 0) {
@@ -1735,10 +1778,26 @@ exports.updateQuestion = async (req, res) => {
             }];
         }
 
+        // Question level'ı otomatik belirle (öncelik: Activity > Lesson)
+        let questionLevel = existingQuestion.questionLevel;
+        if (finalActivity) {
+            questionLevel = 'Activity';
+        } else if (finalLesson) {
+            questionLevel = 'Lesson';
+        }
+
         // Güncelleme verilerini hazırla
         const updateData = {};
-        if (activity) updateData.activity = activity;
-        if (questionType) updateData.questionType = questionType;
+        if (activity !== undefined) updateData.activity = activity || null;
+        if (lesson !== undefined) updateData.lesson = lesson || null;
+        updateData.questionLevel = questionLevel;
+        // Question type ve format
+        if (questionFormat) {
+            updateData.questionFormat = questionFormat;
+            updateData.questionType = questionFormat; // Format varsa type olarak da kullan
+        } else if (questionType) {
+            updateData.questionType = questionType;
+        }
         // correctAnswer opsiyonel - Flutter'da kontrol edilecek
         if (correctAnswer !== undefined) updateData.correctAnswer = correctAnswer ? correctAnswer.trim() : null;
         if (data !== undefined) updateData.data = data;
@@ -1760,6 +1819,7 @@ exports.updateQuestion = async (req, res) => {
             { new: true, runValidators: true }
         )
             .populate('activity', 'title type')
+            .populate('lesson', 'title')
             .lean();
 
         res.status(200).json({
