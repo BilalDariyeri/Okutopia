@@ -9,6 +9,7 @@ const {
     getContentType,
     getAllFiles
 } = require('../utils/gridfs');
+const logger = require('../config/logger');
 
 // ======================================================================
 // DOSYA YÜKLEME
@@ -66,7 +67,7 @@ exports.uploadFile = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Dosya yükleme hatası:', error);
+        logger.error('❌ Dosya yükleme hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Dosya yüklenemedi.',
@@ -108,7 +109,7 @@ exports.downloadFile = async (req, res) => {
         fileStream.pipe(res);
 
     } catch (error) {
-        console.error('❌ Dosya indirme hatası:', error);
+        logger.error('❌ Dosya indirme hatası:', error);
         
         if (error.message === 'Dosya bulunamadı') {
             return res.status(404).json({
@@ -151,7 +152,7 @@ exports.getFileInfo = async (req, res) => {
             file: fileInfo
         });
     } catch (error) {
-        console.error('❌ Dosya bilgisi alma hatası:', error);
+        logger.error('❌ Dosya bilgisi alma hatası:', error);
         
         if (error.message === 'Dosya bulunamadı') {
             return res.status(404).json({
@@ -194,7 +195,7 @@ exports.deleteFile = async (req, res) => {
             message: 'Dosya başarıyla silindi.'
         });
     } catch (error) {
-        console.error('❌ Dosya silme hatası:', error);
+        logger.error('❌ Dosya silme hatası:', error);
         
         if (error.message === 'Dosya bulunamadı') {
             return res.status(404).json({
@@ -221,12 +222,12 @@ exports.deleteFile = async (req, res) => {
  */
 exports.listFiles = async (req, res) => {
     try {
-        console.log('📋 listFiles fonksiyonu çağrıldı');
+        logger.info('📋 listFiles fonksiyonu çağrıldı');
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
         const skip = (page - 1) * limit;
 
-        console.log(`📄 Sayfa: ${page}, Limit: ${limit}, Skip: ${skip}`);
+        logger.info(`📄 Sayfa: ${page}, Limit: ${limit}, Skip: ${skip}`);
 
         const files = await getAllFiles({
             limit,
@@ -234,14 +235,14 @@ exports.listFiles = async (req, res) => {
             sort: { uploadDate: -1 }
         });
 
-        console.log(`✅ ${files.length} dosya bulundu`);
+        logger.info(`✅ ${files.length} dosya bulundu`);
 
         // Toplam dosya sayısını al (GridFS bucket'ından)
         const { getGridFS } = require('../utils/gridfs');
         const gfs = getGridFS();
         const total = await gfs.find({}).toArray().then(files => files.length);
 
-        console.log(`📊 Toplam dosya sayısı: ${total}`);
+        logger.info(`📊 Toplam dosya sayısı: ${total}`);
 
         res.status(200).json({
             success: true,
@@ -254,7 +255,7 @@ exports.listFiles = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Dosya listesi hatası:', error);
+        logger.error('❌ Dosya listesi hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Dosya listesi alınamadı.',

@@ -906,6 +906,28 @@ router.put('/content/question/:id', authenticate, requireAdmin, adminController.
 
 /**
  * @swagger
+ * /api/admin/content/question/{id}:
+ *   delete:
+ *     summary: Soru Sil
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Soru başarıyla silindi
+ *       '404':
+ *         description: Soru bulunamadı
+ */
+router.delete('/content/question/:id', authenticate, requireAdmin, adminController.deleteQuestion);
+
+/**
+ * @swagger
  * /api/admin/content/groups:
  *   get:
  *     summary: Tüm Grupları Listele

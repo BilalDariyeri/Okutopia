@@ -381,12 +381,13 @@ const server = app.listen(PORT, HOST, () => {
     logger.info(`📝 Log dosyaları: ./logs klasöründe`);
     logger.info(`🏥 Health Check: http://localhost:${PORT}/api/health`);
     
-    // Console'a da yazdır (kullanıcı için)
-    console.log(`Sunucu http://localhost:${PORT} üzerinde çalışıyor!`);
-    console.log(`📱 Flutter için: http://10.0.2.2:${PORT}/api (Android emülatör)`);
-    console.log(`📱 Fiziksel cihaz için: http://192.168.1.105:${PORT}/api (IP adresinizi kullanın)`);
-    console.log(`Swagger Dokümantasyonu: http://localhost:${PORT}/api-docs`);
-    console.log(`Health Check: http://localhost:${PORT}/api/health`);
+    // Console'a da yazdır (kullanıcı için) - logger zaten yukarıda logluyor
+    // Bu console.log'lar kullanıcıya bilgi vermek için bırakıldı
+    logger.info(`Sunucu http://localhost:${PORT} üzerinde çalışıyor!`);
+    logger.info(`📱 Flutter için: http://10.0.2.2:${PORT}/api (Android emülatör)`);
+    logger.info(`📱 Fiziksel cihaz için: http://192.168.1.105:${PORT}/api (IP adresinizi kullanın)`);
+    logger.info(`Swagger Dokümantasyonu: http://localhost:${PORT}/api-docs`);
+    logger.info(`Health Check: http://localhost:${PORT}/api/health`);
 });
 
 // 💡 PERFORMANS: Graceful Shutdown (Düzgün kapanma)
@@ -396,11 +397,14 @@ const gracefulShutdown = (signal) => {
     server.close(() => {
         logger.info('HTTP sunucusu kapatıldı.');
         
-        // MongoDB bağlantısını kapat
-        mongoose.connection.close(false, () => {
+        // MongoDB bağlantısını kapat (yeni mongoose versiyonunda callback yok)
+        mongoose.connection.close(false).then(() => {
             logger.info('MongoDB bağlantısı kapatıldı.');
             logger.info('Uygulama başarıyla kapatıldı.');
             process.exit(0);
+        }).catch((error) => {
+            logger.error('MongoDB bağlantısı kapatılırken hata:', error);
+            process.exit(1);
         });
     });
     

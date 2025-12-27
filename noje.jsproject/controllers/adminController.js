@@ -11,6 +11,7 @@ const MiniQuestion = require('../models/miniQuestion');
 const Progress = require('../models/Progress');
 const jwt = require('jsonwebtoken');
 const { QuestionStrategyFactory } = require('../utils/questionStrategies');
+const logger = require('../config/logger');
 
 // Soru tiplerini ve form alanlarını döndür
 exports.getQuestionTypes = async (req, res) => {
@@ -23,7 +24,7 @@ exports.getQuestionTypes = async (req, res) => {
             try {
                 formFieldsMap[type] = QuestionStrategyFactory.getFormFields(type);
             } catch (error) {
-                console.error(`Form fields alınamadı ${type}:`, error.message);
+                logger.error(`Form fields alınamadı ${type}:`, error.message);
             }
         });
 
@@ -35,7 +36,7 @@ exports.getQuestionTypes = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getQuestionTypes hatası:', error);
+        logger.error('getQuestionTypes hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Soru tipleri alınamadı',
@@ -98,7 +99,7 @@ exports.adminLogin = async (req, res) => {
         try {
             passwordMatch = await user.comparePassword(password);
         } catch (matchError) {
-            console.error('Şifre karşılaştırma hatası:', matchError);
+            logger.error('Şifre karşılaştırma hatası:', matchError);
             return res.status(401).json({
                 success: false,
                 message: 'Geçersiz e-posta veya şifre.'
@@ -113,7 +114,7 @@ exports.adminLogin = async (req, res) => {
         }
 
         // Admin rol kontrolü
-        console.log('🔍 Kullanıcı rolü kontrol ediliyor:', {
+        logger.info('🔍 Kullanıcı rolü kontrol ediliyor:', {
             email: user.email,
             role: user.role,
             roleType: typeof user.role,
@@ -122,14 +123,14 @@ exports.adminLogin = async (req, res) => {
         });
         
         if (user.role !== 'Admin' && user.role !== 'SuperAdmin') {
-            console.error('❌ Admin olmayan kullanıcı giriş denemesi:', user.email, 'Rol:', user.role);
+            logger.error('❌ Admin olmayan kullanıcı giriş denemesi:', user.email, 'Rol:', user.role);
             return res.status(403).json({
                 success: false,
                 message: `Sadece adminler giriş yapabilir. Mevcut rolünüz: ${user.role || 'tanımsız'}`
             });
         }
 
-        console.log('✅ Admin rolü onaylandı:', user.role);
+        logger.info('✅ Admin rolü onaylandı:', user.role);
 
         // Token oluştur (ObjectId'yi string'e çevir)
         const token = generateToken(user._id.toString());
@@ -147,7 +148,7 @@ exports.adminLogin = async (req, res) => {
             }
         };
         
-        console.log('✅ Login başarılı, response gönderiliyor:', {
+        logger.info('✅ Login başarılı, response gönderiliyor:', {
             email: user.email,
             role: user.role,
             hasToken: !!token
@@ -155,7 +156,7 @@ exports.adminLogin = async (req, res) => {
 
         res.status(200).json(responseData);
     } catch (error) {
-        console.error('Admin login hatası:', error);
+        logger.error('Admin login hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Giriş yapılırken hata oluştu',
@@ -352,9 +353,9 @@ exports.getUserById = async (req, res) => {
 // Yeni kullanıcı oluştur
 exports.createUser = async (req, res) => {
     try {
-        console.log('🔄 createUser çağrıldı');
+        logger.info('🔄 createUser çağrıldı');
         const { firstName, lastName, email, password, role, classroomId } = req.body;
-        console.log('📥 Gelen veri:', { firstName, lastName, email, role: role, passwordLength: password ? password.length : 0, classroomId });
+        logger.info('📥 Gelen veri:', { firstName, lastName, email, role: role, passwordLength: password ? password.length : 0, classroomId });
 
         if (!firstName || !lastName || !role) {
             return res.status(400).json({
@@ -416,9 +417,9 @@ exports.createUser = async (req, res) => {
         if (email) userData.email = email;
         if (password) userData.password = password;
 
-        console.log('👤 User oluşturuluyor:', userData);
+        logger.info('👤 User oluşturuluyor:', userData);
         const user = await User.create(userData);
-        console.log('✅ User oluşturuldu:', { _id: user._id, firstName: user.firstName, lastName: user.lastName, role: user.role });
+        logger.info('✅ User oluşturuldu:', { _id: user._id, firstName: user.firstName, lastName: user.lastName, role: user.role });
 
         // 💡 KRİTİK: Eğer role Teacher ise, otomatik sınıf oluştur
         if (role === 'Teacher') {
@@ -428,13 +429,13 @@ exports.createUser = async (req, res) => {
                     teacher: user._id,
                     students: []
                 });
-                console.log('✅ Öğretmen için otomatik sınıf oluşturuldu:', { 
+                logger.info('✅ Öğretmen için otomatik sınıf oluşturuldu:', { 
                     classroomId: newClassroom._id, 
                     classroomName: newClassroom.name,
                     teacherId: user._id 
                 });
             } catch (classroomError) {
-                console.error('❌ Öğretmen için sınıf oluşturulurken hata:', classroomError);
+                logger.error('❌ Öğretmen için sınıf oluşturulurken hata:', classroomError);
                 // Hata olsa bile devam et, sadece log'la (öğretmen zaten oluşturuldu)
             }
         }
@@ -448,22 +449,22 @@ exports.createUser = async (req, res) => {
                     { $addToSet: { students: user._id } },
                     { new: true }
                 );
-                console.log('✅ Öğrenci sınıfa eklendi:', { studentId: user._id, classroomId: classroomId });
+                logger.info('✅ Öğrenci sınıfa eklendi:', { studentId: user._id, classroomId: classroomId });
             } catch (classroomError) {
-                console.error('❌ Öğrenci sınıfa eklenirken hata:', classroomError);
+                logger.error('❌ Öğrenci sınıfa eklenirken hata:', classroomError);
                 // Hata olsa bile devam et, sadece log'la
             }
-            console.log('🎓 Role Student, students koleksiyonuna ekleniyor...');
+            logger.info('🎓 Role Student, students koleksiyonuna ekleniyor...');
             try {
                 // MongoDB bağlantısının hazır olduğundan emin ol
                 const db = mongoose.connection.db;
                 if (!db) {
-                    console.error('❌ MongoDB bağlantısı hazır değil! readyState:', mongoose.connection.readyState);
+                    logger.error('❌ MongoDB bağlantısı hazır değil! readyState:', mongoose.connection.readyState);
                     // Bağlantı hazır değilse bekle
                     if (mongoose.connection.readyState === 0 || mongoose.connection.readyState === 3) {
-                        console.error('❌ MongoDB bağlantısı kapalı!');
+                        logger.error('❌ MongoDB bağlantısı kapalı!');
                     } else {
-                        console.log('⏳ MongoDB bağlantısı bekleniyor...');
+                        logger.info('⏳ MongoDB bağlantısı bekleniyor...');
                         await new Promise((resolve) => {
                             if (mongoose.connection.readyState === 1) {
                                 resolve();
@@ -486,7 +487,7 @@ exports.createUser = async (req, res) => {
                         updatedAt: new Date()
                     };
 
-                    console.log('🔄 Admin panelinden öğrenci students koleksiyonuna ekleniyor:', {
+                    logger.info('🔄 Admin panelinden öğrenci students koleksiyonuna ekleniyor:', {
                         _id: studentData._id,
                         firstName: studentData.firstName,
                         lastName: studentData.lastName,
@@ -511,35 +512,35 @@ exports.createUser = async (req, res) => {
                                 }
                             }
                         );
-                        console.log('✅ Mevcut kayıt Student olarak güncellendi:', updateResult.modifiedCount > 0 ? 'Güncellendi' : 'Değişiklik yok');
+                        logger.info('✅ Mevcut kayıt Student olarak güncellendi:', updateResult.modifiedCount > 0 ? 'Güncellendi' : 'Değişiklik yok');
                     } else {
                         // Yeni kayıt ekle
                         const insertResult = await studentsCollection.insertOne(studentData);
                         if (insertResult.insertedId) {
-                            console.log('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
+                            logger.info('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
                         } else {
-                            console.error('❌ Students koleksiyonuna ekleme başarısız oldu - insertedId yok');
+                            logger.error('❌ Students koleksiyonuna ekleme başarısız oldu - insertedId yok');
                         }
                     }
                 } else {
-                    console.error('❌ MongoDB bağlantısı hala hazır değil!');
+                    logger.error('❌ MongoDB bağlantısı hala hazır değil!');
                 }
             } catch (insertError) {
                 // Eğer duplicate key hatası varsa (aynı _id zaten varsa), devam et
                 if (insertError.code === 11000) {
-                    console.log('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), güncelleniyor...');
+                    logger.info('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), güncelleniyor...');
                     try {
                         const updateResult = await mongoose.connection.db.collection('students').updateOne(
                             { _id: user._id },
                             { $set: { role: 'Student', firstName: user.firstName, lastName: user.lastName, updatedAt: new Date() } }
                         );
-                        console.log('✅ Mevcut kayıt Student olarak güncellendi:', updateResult.modifiedCount > 0 ? 'Güncellendi' : 'Değişiklik yok');
+                        logger.info('✅ Mevcut kayıt Student olarak güncellendi:', updateResult.modifiedCount > 0 ? 'Güncellendi' : 'Değişiklik yok');
                     } catch (updateError) {
-                        console.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
+                        logger.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
                     }
                 } else {
-                    console.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
-                    console.error('❌ Hata detayı:', {
+                    logger.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
+                    logger.error('❌ Hata detayı:', {
                         code: insertError.code,
                         message: insertError.message,
                         stack: insertError.stack
@@ -633,33 +634,33 @@ exports.updateUser = async (req, res) => {
                 
                 if (existingStudent) {
                     // Mevcut kaydı güncelle
-                    console.log('🔄 Admin panelinden öğrenci students koleksiyonunda güncelleniyor:', studentData);
+                    logger.info('🔄 Admin panelinden öğrenci students koleksiyonunda güncelleniyor:', studentData);
                     await mongoose.connection.db.collection('students').updateOne(
                         { _id: user._id },
                         { $set: studentData }
                     );
-                    console.log('✅ Öğrenci students koleksiyonunda güncellendi');
+                    logger.info('✅ Öğrenci students koleksiyonunda güncellendi');
                 } else {
                     // Yeni kayıt ekle
                     studentData.createdAt = new Date();
-                    console.log('🔄 Admin panelinden öğrenci students koleksiyonuna ekleniyor:', studentData);
+                    logger.info('🔄 Admin panelinden öğrenci students koleksiyonuna ekleniyor:', studentData);
                     const insertResult = await mongoose.connection.db.collection('students').insertOne(studentData);
                     if (insertResult.insertedId) {
-                        console.log('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
+                        logger.info('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
                     }
                 }
             } catch (error) {
-                console.error('❌ Students koleksiyonuna ekleme/güncelleme hatası:', error);
+                logger.error('❌ Students koleksiyonuna ekleme/güncelleme hatası:', error);
                 // Hata olsa bile kullanıcı güncellendi, sadece log'la
             }
         } else if (oldRole === 'Student' && newRole !== 'Student') {
             // Eğer role Student'dan başka bir role'e değiştiyse, students koleksiyonundan sil
             try {
-                console.log('🔄 Role Student değil, students koleksiyonundan siliniyor:', user._id);
+                logger.info('🔄 Role Student değil, students koleksiyonundan siliniyor:', user._id);
                 await mongoose.connection.db.collection('students').deleteOne({ _id: user._id });
-                console.log('✅ Kullanıcı students koleksiyonundan silindi');
+                logger.info('✅ Kullanıcı students koleksiyonundan silindi');
             } catch (error) {
-                console.error('❌ Students koleksiyonundan silme hatası:', error);
+                logger.error('❌ Students koleksiyonundan silme hatası:', error);
             }
         }
 
@@ -883,7 +884,7 @@ exports.getAllActivities = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAllActivities hatası:', error);
+        logger.error('getAllActivities hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Etkinlikler getirilirken hata oluştu',
@@ -939,7 +940,7 @@ exports.getActivityById = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getActivityById hatası:', error);
+        logger.error('getActivityById hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Etkinlik getirilirken hata oluştu',
@@ -1033,7 +1034,7 @@ exports.createActivity = async (req, res) => {
             data: populatedActivity
         });
     } catch (error) {
-        console.error('createActivity hatası:', error);
+        logger.error('createActivity hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Etkinlik oluşturulurken hata oluştu',
@@ -1093,7 +1094,7 @@ exports.updateActivity = async (req, res) => {
             data: populatedActivity
         });
     } catch (error) {
-        console.error('updateActivity hatası:', error);
+        logger.error('updateActivity hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Etkinlik güncellenirken hata oluştu',
@@ -1134,7 +1135,7 @@ exports.deleteActivity = async (req, res) => {
             message: 'Etkinlik ve bağlı sorular başarıyla silindi.'
         });
     } catch (error) {
-        console.error('deleteActivity hatası:', error);
+        logger.error('deleteActivity hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Etkinlik silinirken hata oluştu',
@@ -1185,7 +1186,7 @@ exports.deleteCategory = async (req, res) => {
             message: 'Kategori başarıyla silindi.'
         });
     } catch (error) {
-        console.error('deleteCategory hatası:', error);
+        logger.error('deleteCategory hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Kategori silinirken hata oluştu',
@@ -1199,7 +1200,7 @@ exports.createCategory = async (req, res) => {
     try {
         const { name, description, flowType, iconUrl } = req.body;
 
-        console.log('createCategory - Request body:', req.body);
+        logger.info('createCategory - Request body:', req.body);
 
         if (!name) {
             return res.status(400).json({
@@ -1210,7 +1211,7 @@ exports.createCategory = async (req, res) => {
 
         // Category model'inin yüklü olduğunu kontrol et
         if (!Category) {
-            console.error('createCategory - Category model yüklenemedi!');
+            logger.error('createCategory - Category model yüklenemedi!');
             return res.status(500).json({
                 success: false,
                 message: 'Category model yüklenemedi. Sunucu yapılandırmasını kontrol edin.'
@@ -1224,7 +1225,7 @@ exports.createCategory = async (req, res) => {
             iconUrl: iconUrl || ''
         });
 
-        console.log('createCategory - Kategori oluşturuldu:', category._id);
+        logger.info('createCategory - Kategori oluşturuldu:', category._id);
 
         res.status(201).json({
             success: true,
@@ -1232,10 +1233,10 @@ exports.createCategory = async (req, res) => {
             data: category
         });
     } catch (error) {
-        console.error('createCategory hatası:', error);
-        console.error('createCategory - Error stack:', error.stack);
-        console.error('createCategory - Error name:', error.name);
-        console.error('createCategory - Error message:', error.message);
+        logger.error('createCategory hatası:', error);
+        logger.error('createCategory - Error stack:', error.stack);
+        logger.error('createCategory - Error name:', error.name);
+        logger.error('createCategory - Error message:', error.message);
         
         if (error.code === 11000) {
             return res.status(400).json({
@@ -1325,7 +1326,7 @@ exports.createGroup = async (req, res) => {
             data: populatedGroup
         });
     } catch (error) {
-        console.error('createGroup hatası:', error);
+        logger.error('createGroup hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Grup oluşturulurken hata oluştu',
@@ -1372,7 +1373,7 @@ exports.deleteGroup = async (req, res) => {
             message: 'Grup başarıyla silindi.'
         });
     } catch (error) {
-        console.error('deleteGroup hatası:', error);
+        logger.error('deleteGroup hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Grup silinirken hata oluştu',
@@ -1420,7 +1421,7 @@ exports.deleteLesson = async (req, res) => {
             message: 'Ders başarıyla silindi.'
         });
     } catch (error) {
-        console.error('deleteLesson hatası:', error);
+        logger.error('deleteLesson hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Ders silinirken hata oluştu',
@@ -1499,7 +1500,7 @@ exports.createLesson = async (req, res) => {
             data: populatedLesson
         });
     } catch (error) {
-        console.error('createLesson hatası:', error);
+        logger.error('createLesson hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Ders oluşturulurken hata oluştu',
@@ -1511,12 +1512,16 @@ exports.createLesson = async (req, res) => {
 // Soru oluştur
 exports.createQuestion = async (req, res) => {
     try {
+        logger.info('createQuestion - Gelen veri:', JSON.stringify(req.body, null, 2));
+        
         const { 
             activity, 
+            lesson,
             group, 
             parentQuestion, 
             questionType,
             questionFormat, // Yeni: Dinamik soru formatı (ONLY_TEXT, AUDIO_TEXT, vb.)
+            questionLevel, // Frontend'den gelen questionLevel
             correctAnswer, 
             data, 
             mediaFileId, 
@@ -1526,13 +1531,16 @@ exports.createQuestion = async (req, res) => {
             mediaStorage 
         } = req.body;
 
-        // 💡 ESNEK YAPI: En az bir ilişki olmalı (activity, group veya parentQuestion)
-        if (!activity && !group && !parentQuestion) {
+        // 💡 ESNEK YAPI: En az bir ilişki olmalı (activity, lesson, group veya parentQuestion)
+        if (!activity && !lesson && !group && !parentQuestion) {
+            logger.error('createQuestion - Validation hatası: Hiçbir ilişki yok');
             return res.status(400).json({
                 success: false,
-                message: 'Soru en az bir seviyeye bağlı olmalıdır (activity, group veya parentQuestion).'
+                message: 'Soru en az bir seviyeye bağlı olmalıdır (activity, lesson, group veya parentQuestion).'
             });
         }
+        
+        logger.info('createQuestion - Activity:', activity, 'Lesson:', lesson, 'Group:', group, 'ParentQuestion:', parentQuestion);
 
         // Soru tipini belirle (questionFormat varsa onu kullan, yoksa questionType)
         const finalQuestionType = questionFormat || questionType;
@@ -1570,6 +1578,7 @@ exports.createQuestion = async (req, res) => {
                 questionType: finalQuestionType,
                 questionFormat: finalQuestionType,
                 activity,
+                lesson,
                 group,
                 parentQuestion,
                 correctAnswer,
@@ -1582,9 +1591,10 @@ exports.createQuestion = async (req, res) => {
             });
         } catch (strategyError) {
             // Eğer yeni format bulunamazsa, eski formatı kullan (backward compatibility)
-            console.warn('Strategy bulunamadı, eski format kullanılıyor:', strategyError.message);
+            logger.warn('Strategy bulunamadı, eski format kullanılıyor:', strategyError.message);
             normalizedQuestionData = {
                 activity,
+                lesson,
                 group,
                 parentQuestion,
                 questionType: finalQuestionType,
@@ -1611,6 +1621,18 @@ exports.createQuestion = async (req, res) => {
             }
         }
 
+        // Ders var mı kontrol et (eğer lesson varsa)
+        if (lesson) {
+            const Lesson = require('../models/lesson');
+            const lessonExists = await Lesson.findById(lesson);
+            if (!lessonExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Seçilen ders bulunamadı.'
+                });
+            }
+        }
+
         // Grup var mı kontrol et (eğer group varsa)
         if (group) {
             const groupExists = await Group.findById(group);
@@ -1633,14 +1655,42 @@ exports.createQuestion = async (req, res) => {
             }
         }
 
-        // Question level'ı otomatik belirle
-        let questionLevel = 'Activity'; // Varsayılan
-        if (normalizedQuestionData.group) {
-            questionLevel = 'Group';
-        } else if (normalizedQuestionData.activity) {
-            questionLevel = 'Activity';
-        } else if (normalizedQuestionData.parentQuestion) {
-            questionLevel = 'Nested';
+        // Question level'ı belirle (frontend'den gelen varsa onu kullan, yoksa otomatik belirle)
+        let finalQuestionLevel = questionLevel || req.body.questionLevel;
+        logger.info('createQuestion - Frontend questionLevel:', questionLevel, 'req.body.questionLevel:', req.body.questionLevel);
+        
+        if (!finalQuestionLevel) {
+            // Otomatik belirle
+            logger.info('createQuestion - Normalized data:', {
+                group: normalizedQuestionData.group,
+                lesson: normalizedQuestionData.lesson,
+                activity: normalizedQuestionData.activity,
+                parentQuestion: normalizedQuestionData.parentQuestion
+            });
+            
+            if (normalizedQuestionData.group) {
+                finalQuestionLevel = 'Group';
+            } else if (normalizedQuestionData.lesson) {
+                finalQuestionLevel = 'Lesson';
+            } else if (normalizedQuestionData.activity) {
+                finalQuestionLevel = 'Activity';
+            } else if (normalizedQuestionData.parentQuestion) {
+                finalQuestionLevel = 'Nested';
+            } else {
+                finalQuestionLevel = 'Activity'; // Varsayılan
+            }
+        }
+        
+        logger.info('createQuestion - Final questionLevel:', finalQuestionLevel);
+        
+        // QuestionLevel enum kontrolü
+        const validLevels = ['Group', 'Lesson', 'Activity', 'Nested'];
+        if (!validLevels.includes(finalQuestionLevel)) {
+            logger.error('createQuestion - Geçersiz questionLevel:', finalQuestionLevel);
+            return res.status(400).json({
+                success: false,
+                message: `Geçersiz questionLevel: ${finalQuestionLevel}. Geçerli değerler: ${validLevels.join(', ')}`
+            });
         }
 
         // mediaFiles array'ini hazırla (normalize edilmiş veriden)
@@ -1656,11 +1706,12 @@ exports.createQuestion = async (req, res) => {
             }];
         }
 
-        const question = await MiniQuestion.create({
+        const questionDataToCreate = {
             activity: normalizedQuestionData.activity || null,
+            lesson: normalizedQuestionData.lesson || null,
             group: normalizedQuestionData.group || null,
             parentQuestion: normalizedQuestionData.parentQuestion || null,
-            questionLevel: questionLevel,
+            questionLevel: finalQuestionLevel,
             questionType: normalizedQuestionData.questionType,
             correctAnswer: normalizedQuestionData.correctAnswer ? 
                 (typeof normalizedQuestionData.correctAnswer === 'string' ? normalizedQuestionData.correctAnswer.trim() : normalizedQuestionData.correctAnswer) : 
@@ -1670,11 +1721,59 @@ exports.createQuestion = async (req, res) => {
             mediaFiles: processedMediaFiles,
             mediaUrl: normalizedQuestionData.mediaUrl || null,
             mediaType: normalizedQuestionData.mediaType || 'None',
-            mediaStorage: normalizedQuestionData.mediaStorage || 'None'
-        });
+            mediaStorage: normalizedQuestionData.mediaStorage || 'None',
+            createdBy: req.user ? req.user._id : null // Soruyu oluşturan kullanıcı
+        };
+        
+        logger.info('createQuestion - Oluşturulacak soru verisi:', JSON.stringify(questionDataToCreate, null, 2));
+        
+        // 💡 DUPLICATE KONTROLÜ: Aynı medya dosyasına sahip soru var mı kontrol et
+        const duplicateCheck = {
+            $or: []
+        };
+        
+        // Activity seviyesinde duplicate kontrolü
+        if (questionDataToCreate.activity) {
+            duplicateCheck.$or.push({
+                activity: questionDataToCreate.activity,
+                'data.questionText': questionDataToCreate.data?.questionText || '',
+                mediaFileId: questionDataToCreate.mediaFileId || null
+            });
+        }
+        
+        // Lesson seviyesinde duplicate kontrolü
+        if (questionDataToCreate.lesson) {
+            duplicateCheck.$or.push({
+                lesson: questionDataToCreate.lesson,
+                'data.questionText': questionDataToCreate.data?.questionText || '',
+                mediaFileId: questionDataToCreate.mediaFileId || null
+            });
+        }
+        
+        // Son 5 saniye içinde aynı soru eklenmiş mi kontrol et
+        if (duplicateCheck.$or.length > 0) {
+            const recentDuplicate = await MiniQuestion.findOne({
+                ...duplicateCheck,
+                createdAt: { $gte: new Date(Date.now() - 5000) } // Son 5 saniye
+            });
+            
+            if (recentDuplicate) {
+                logger.warn('createQuestion - Duplicate soru tespit edildi (son 5 saniye içinde):', recentDuplicate._id);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bu soru çok kısa süre önce eklenmiş. Lütfen bekleyin veya sayfayı yenileyin.',
+                    duplicateId: recentDuplicate._id
+                });
+            }
+        }
+        
+        const question = await MiniQuestion.create(questionDataToCreate);
+        
+        logger.info('createQuestion - Soru başarıyla oluşturuldu:', question._id);
 
         const populatedQuestion = await MiniQuestion.findById(question._id)
             .populate('activity', 'title type')
+            .populate('createdBy', 'firstName lastName email')
             .lean();
 
         res.status(201).json({
@@ -1683,11 +1782,13 @@ exports.createQuestion = async (req, res) => {
             data: populatedQuestion
         });
     } catch (error) {
-        console.error('createQuestion hatası:', error);
+        logger.error('createQuestion hatası:', error);
+        logger.error('Hata detayı:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Soru oluşturulurken hata oluştu',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası'
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
@@ -1696,7 +1797,7 @@ exports.createQuestion = async (req, res) => {
 exports.updateQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const { activity, questionType, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage } = req.body;
+        const { activity, lesson, questionType, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage, questionLevel } = req.body;
 
         // Soru var mı kontrol et
         const existingQuestion = await MiniQuestion.findById(id);
@@ -1718,6 +1819,18 @@ exports.updateQuestion = async (req, res) => {
             }
         }
 
+        // Ders var mı kontrol et (eğer değiştiriliyorsa)
+        if (lesson) {
+            const Lesson = require('../models/lesson');
+            const lessonExists = await Lesson.findById(lesson);
+            if (!lessonExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Seçilen ders bulunamadı.'
+                });
+            }
+        }
+
         // mediaFiles array'ini hazırla (birden fazla medya dosyası için)
         let processedMediaFiles = [];
         if (mediaFiles && Array.isArray(mediaFiles) && mediaFiles.length > 0) {
@@ -1735,10 +1848,28 @@ exports.updateQuestion = async (req, res) => {
             }];
         }
 
+        // Question level'ı belirle
+        let finalQuestionLevel = questionLevel;
+        if (!finalQuestionLevel) {
+            if (lesson) {
+                finalQuestionLevel = 'Lesson';
+            } else if (activity) {
+                finalQuestionLevel = 'Activity';
+            } else if (existingQuestion.group) {
+                finalQuestionLevel = 'Group';
+            } else if (existingQuestion.parentQuestion) {
+                finalQuestionLevel = 'Nested';
+            } else {
+                finalQuestionLevel = existingQuestion.questionLevel || 'Activity';
+            }
+        }
+
         // Güncelleme verilerini hazırla
         const updateData = {};
-        if (activity) updateData.activity = activity;
+        if (activity !== undefined) updateData.activity = activity || null;
+        if (lesson !== undefined) updateData.lesson = lesson || null;
         if (questionType) updateData.questionType = questionType;
+        if (finalQuestionLevel) updateData.questionLevel = finalQuestionLevel;
         // correctAnswer opsiyonel - Flutter'da kontrol edilecek
         if (correctAnswer !== undefined) updateData.correctAnswer = correctAnswer ? correctAnswer.trim() : null;
         if (data !== undefined) updateData.data = data;
@@ -1768,7 +1899,7 @@ exports.updateQuestion = async (req, res) => {
             data: question
         });
     } catch (error) {
-        console.error('updateQuestion hatası:', error);
+        logger.error('updateQuestion hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Soru güncellenirken hata oluştu',
@@ -1809,7 +1940,7 @@ exports.getAllGroups = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAllGroups hatası:', error);
+        logger.error('getAllGroups hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Gruplar getirilirken hata oluştu',
@@ -1857,7 +1988,7 @@ exports.getAllLessons = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAllLessons hatası:', error);
+        logger.error('getAllLessons hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Dersler getirilirken hata oluştu',
@@ -1880,6 +2011,7 @@ exports.getAllQuestions = async (req, res) => {
 
         const questions = await MiniQuestion.find(filter)
             .populate('activity', 'title type')
+            .populate('createdBy', 'firstName lastName email')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -1898,10 +2030,41 @@ exports.getAllQuestions = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAllQuestions hatası:', error);
+        logger.error('getAllQuestions hatası:', error);
         res.status(500).json({
             success: false,
             message: 'Sorular getirilirken hata oluştu',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası'
+        });
+    }
+};
+
+// Soru Silme
+exports.deleteQuestion = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Soru var mı kontrol et
+        const question = await MiniQuestion.findById(id);
+        if (!question) {
+            return res.status(404).json({
+                success: false,
+                message: 'Soru bulunamadı.'
+            });
+        }
+
+        // Soruyu sil
+        await MiniQuestion.findByIdAndDelete(id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Soru başarıyla silindi.'
+        });
+    } catch (error) {
+        logger.error('deleteQuestion hatası:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Soru silinirken hata oluştu',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası'
         });
     }

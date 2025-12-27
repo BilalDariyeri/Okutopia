@@ -1,6 +1,7 @@
 // controllers/classroomController.js
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
 
 // Gerekli Mongoose Modellerini içeri aktar (path normalize ile case-sensitivity sorunu çözüldü)
 const Classroom = require(path.resolve(__dirname, '../models/classroom'));
@@ -171,35 +172,35 @@ exports.addStudentToClass = async (req, res) => {
         
         // MongoDB'ye direkt students koleksiyonuna ekle (transaction içinde)
         try {
-            console.log('🔄 Öğrenci students koleksiyonuna ekleniyor:', studentData);
+            logger.info('🔄 Öğrenci students koleksiyonuna ekleniyor:', studentData);
             const insertResult = await mongoose.connection.db.collection('students').insertOne(studentData, { session });
             if (!insertResult.insertedId) {
                 throw new Error('Students koleksiyonuna ekleme başarısız oldu');
             }
             // 💡 LOG: Başarılı ekleme
-            console.log('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
+            logger.info('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
         } catch (insertError) {
             // Eğer duplicate key hatası varsa (aynı _id zaten varsa), devam et
             if (insertError.code === 11000) {
-                console.log('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), devam ediliyor...');
+                logger.info('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), devam ediliyor...');
                 // Mevcut kaydın role'ünü kontrol et ve güncelle
                 try {
                     const existingStudent = await mongoose.connection.db.collection('students').findOne({ _id: studentId }, { session });
                     if (existingStudent && existingStudent.role !== 'Student') {
-                        console.log('⚠️ Mevcut kayıt Student değil, role güncelleniyor...');
+                        logger.info('⚠️ Mevcut kayıt Student değil, role güncelleniyor...');
                         await mongoose.connection.db.collection('students').updateOne(
                             { _id: studentId },
                             { $set: { role: 'Student', firstName: newStudent.firstName, lastName: newStudent.lastName, updatedAt: new Date() } },
                             { session }
                         );
-                        console.log('✅ Mevcut kayıt Student olarak güncellendi');
+                        logger.info('✅ Mevcut kayıt Student olarak güncellendi');
                     }
                 } catch (updateError) {
-                    console.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
+                    logger.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
                 }
             } else {
                 // Diğer hatalar için transaction'ı iptal et
-                console.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
+                logger.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
                 await session.abortTransaction();
                 session.endSession();
                 return res.status(500).json({ 
@@ -290,20 +291,20 @@ exports.getClassroomStudents = async (req, res) => {
     const { classId } = req.params;
     const { teacherId } = req.query; // Query parametresi olarak öğretmen ID'si
 
-    console.log('🔍 getClassroomStudents çağrıldı:', { classId, teacherId });
+    logger.info('🔍 getClassroomStudents çağrıldı:', { classId, teacherId });
 
     try {
         // Sınıfı bul ve öğretmen kontrolü yap
-        console.log('📋 Sınıf aranıyor:', classId);
+        logger.info('📋 Sınıf aranıyor:', classId);
         const classroom = await Classroom.findById(classId).lean();
         if (!classroom) {
-            console.log('❌ Sınıf bulunamadı:', classId);
+            logger.info('❌ Sınıf bulunamadı:', classId);
             return res.status(404).json({
                 success: false,
                 message: 'Sınıf bulunamadı.'
             });
         }
-        console.log('✅ Sınıf bulundu:', classroom.name);
+        logger.info('✅ Sınıf bulundu:', classroom.name);
 
         // 💡 GÜVENLİK: Öğretmen kontrolü (opsiyonel ama önerilir)
         if (teacherId) {
@@ -317,13 +318,13 @@ exports.getClassroomStudents = async (req, res) => {
         }
 
         // 💡 PERFORMANS: Tek query ile öğrencileri ve ilerlemelerini çek
-        console.log('👥 Öğrenciler populate ediliyor...');
+        logger.info('👥 Öğrenciler populate ediliyor...');
         const populatedClassroom = await Classroom.findById(classId)
             .populate('students', 'firstName lastName role')
             .lean();
 
         if (!populatedClassroom || !populatedClassroom.students || populatedClassroom.students.length === 0) {
-            console.log('ℹ️ Sınıfta öğrenci yok');
+            logger.info('ℹ️ Sınıfta öğrenci yok');
             return res.status(200).json({
                 success: true,
                 classroom: {
@@ -336,14 +337,14 @@ exports.getClassroomStudents = async (req, res) => {
             });
         }
 
-        console.log(`📊 ${populatedClassroom.students.length} öğrenci bulundu`);
+        logger.info(`📊 ${populatedClassroom.students.length} öğrenci bulundu`);
 
         // 💡 PERFORMANS: Tüm ilerlemeleri tek query ile çek (N+1 problemi çözüldü)
         const studentIds = populatedClassroom.students
             .filter(s => s !== null)
             .map(s => s._id);
 
-        console.log('📈 Progress kayıtları aranıyor...', { studentCount: studentIds.length });
+        logger.info('📈 Progress kayıtları aranıyor...', { studentCount: studentIds.length });
         const allProgress = await Progress.find({ 
             student: { $in: studentIds },
             classroom: classId 
@@ -351,7 +352,7 @@ exports.getClassroomStudents = async (req, res) => {
         .select('student overallScore activityRecords')
         .lean();
         
-        console.log(`✅ ${allProgress.length} progress kaydı bulundu`);
+        logger.info(`✅ ${allProgress.length} progress kaydı bulundu`);
 
         // Progress'leri student ID'ye göre map'le (hızlı erişim için)
         const progressMap = new Map();
@@ -362,24 +363,24 @@ exports.getClassroomStudents = async (req, res) => {
         });
 
         // Öğrencileri ilerleme bilgileri ile birleştir
-        console.log('🔄 Öğrenciler progress bilgileri ile birleştiriliyor...');
+        logger.info('🔄 Öğrenciler progress bilgileri ile birleştiriliyor...');
         const studentsWithProgress = populatedClassroom.students
             .filter(student => student !== null)
             .map((student, index) => {
                 try {
-                    console.log(`  📝 Öğrenci ${index + 1}/${populatedClassroom.students.length}: ${student.firstName} ${student.lastName}`);
+                    logger.info(`  📝 Öğrenci ${index + 1}/${populatedClassroom.students.length}: ${student.firstName} ${student.lastName}`);
                     const progress = progressMap.get(student._id.toString());
                     
                     // En son aktivite tarihini bul
                     let lastActivity = null;
                     try {
                         if (progress && progress.activityRecords && Array.isArray(progress.activityRecords) && progress.activityRecords.length > 0) {
-                            console.log(`    📅 ${progress.activityRecords.length} aktivite kaydı bulundu`);
+                            logger.info(`    📅 ${progress.activityRecords.length} aktivite kaydı bulundu`);
                             // completionDate'e göre sırala ve en son olanı al
                             const sortedRecords = progress.activityRecords
                                 .filter(record => {
                                     if (!record || !record.completionDate) {
-                                        console.log(`    ⚠️ Geçersiz kayıt atlandı:`, record);
+                                        logger.info(`    ⚠️ Geçersiz kayıt atlandı:`, record);
                                         return false;
                                     }
                                     return true;
@@ -392,7 +393,7 @@ exports.getClassroomStudents = async (req, res) => {
                                             completionDate: dateObj
                                         };
                                     } catch (dateError) {
-                                        console.log(`    ⚠️ Tarih parse hatası:`, record.completionDate, dateError.message);
+                                        logger.info(`    ⚠️ Tarih parse hatası:`, record.completionDate, dateError.message);
                                         return null;
                                     }
                                 })
@@ -406,19 +407,19 @@ exports.getClassroomStudents = async (req, res) => {
                                 const dateObj = sortedRecords[0].completionDate;
                                 if (dateObj && dateObj instanceof Date && !isNaN(dateObj.getTime())) {
                                     lastActivity = dateObj.toISOString();
-                                    console.log(`    ✅ Son aktivite: ${lastActivity}`);
+                                    logger.info(`    ✅ Son aktivite: ${lastActivity}`);
                                 } else {
-                                    console.log(`    ⚠️ Geçersiz tarih objesi:`, dateObj);
+                                    logger.info(`    ⚠️ Geçersiz tarih objesi:`, dateObj);
                                 }
                             } else {
-                                console.log(`    ℹ️ Geçerli tarihli kayıt bulunamadı`);
+                                logger.info(`    ℹ️ Geçerli tarihli kayıt bulunamadı`);
                             }
                         } else {
-                            console.log(`    ℹ️ Aktivite kaydı yok`);
+                            logger.info(`    ℹ️ Aktivite kaydı yok`);
                         }
                     } catch (dateError) {
                         // Tarih işleme hatası durumunda lastActivity null kalır
-                        console.error(`    ❌ Tarih işleme hatası (öğrenci: ${student.firstName}):`, dateError.message, dateError.stack);
+                        logger.error(`    ❌ Tarih işleme hatası (öğrenci: ${student.firstName}):`, dateError.message, dateError.stack);
                     }
                 
                     return {
@@ -436,7 +437,7 @@ exports.getClassroomStudents = async (req, res) => {
                         lastActivity: lastActivity
                     };
                 } catch (studentError) {
-                    console.error(`    ❌ Öğrenci işleme hatası (${student.firstName} ${student.lastName}):`, studentError.message, studentError.stack);
+                    logger.error(`    ❌ Öğrenci işleme hatası (${student.firstName} ${student.lastName}):`, studentError.message, studentError.stack);
                     // Hata durumunda minimal bilgi döndür
                     return {
                         id: student._id,
@@ -452,7 +453,7 @@ exports.getClassroomStudents = async (req, res) => {
                 }
             });
 
-        console.log(`✅ ${studentsWithProgress.length} öğrenci başarıyla işlendi`);
+        logger.info(`✅ ${studentsWithProgress.length} öğrenci başarıyla işlendi`);
         res.status(200).json({
             success: true,
             classroom: {
@@ -464,11 +465,11 @@ exports.getClassroomStudents = async (req, res) => {
             totalStudents: studentsWithProgress.length
         });
     } catch (error) {
-        console.error('❌ getClassroomStudents HATASI:');
-        console.error('  📍 Hata mesajı:', error.message);
-        console.error('  📍 Hata tipi:', error.name);
-        console.error('  📍 Stack trace:', error.stack);
-        console.error('  📍 Request bilgileri:', { classId, teacherId });
+        logger.error('❌ getClassroomStudents HATASI:');
+        logger.error('  📍 Hata mesajı:', error.message);
+        logger.error('  📍 Hata tipi:', error.name);
+        logger.error('  📍 Stack trace:', error.stack);
+        logger.error('  📍 Request bilgileri:', { classId, teacherId });
         res.status(500).json({
             success: false,
             message: 'Öğrenciler yüklenemedi.',

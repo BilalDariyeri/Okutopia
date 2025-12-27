@@ -56,6 +56,19 @@ exports.errorHandler = (err, req, res, next) => {
     };
 
     // Status code'a göre log seviyesi
+    // 404 hatalarını (özellikle Chrome devtools gibi) loglamayı atla
+    if (statusCode === 404 && (
+        req.path.includes('.well-known') || 
+        req.path.includes('favicon.ico') ||
+        req.path.includes('robots.txt')
+    )) {
+        // Bu tür 404'leri loglama
+        return res.status(404).json({
+            success: false,
+            message: 'Bulunamadı'
+        });
+    }
+    
     if (statusCode >= 500) {
         logger.error('Application Error', errorLog);
     } else if (statusCode >= 400) {

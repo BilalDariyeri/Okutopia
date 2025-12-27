@@ -1251,10 +1251,22 @@
             <div id="questionModalAlert"></div>
             <form id="questionForm">
                 <div class="form-group">
-                    <label>Aktivite *</label>
-                    <select id="questionActivity" required>
-                        <option value="">Aktivite Seçin</option>
-                    </select>
+                    <label>Etkinlik veya Ders *</label>
+                    <small style="color: #666; display: block; margin-bottom: 5px;">En az birini seçmelisiniz</small>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-size: 12px; color: #666;">Etkinlik</label>
+                            <select id="questionActivity">
+                                <option value="">Etkinlik Seçin (Opsiyonel)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #666;">Ders</label>
+                            <select id="questionLesson">
+                                <option value="">Ders Seçin (Opsiyonel)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Soru Formatı *</label>
@@ -1580,6 +1592,9 @@
         }
 
         // DOM yüklendiğinde çalış
+        // Global flag - form submit kontrolü için
+        let questionFormSubmitting = false;
+        
         document.addEventListener('DOMContentLoaded', () => {
             // Check if already logged in
             if (currentToken) {
@@ -2086,93 +2101,148 @@
 
             const questionForm = document.getElementById('questionForm');
             if (questionForm) {
-                questionForm.addEventListener('submit', async (e) => {
+                // Önce mevcut listener'ı kaldır (eğer varsa)
+                const newForm = questionForm.cloneNode(true);
+                questionForm.parentNode.replaceChild(newForm, questionForm);
+                
+                // Yeni form'a listener ekle
+                newForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     
-                    // Soru formatını al (yeni sistem)
-                    const questionFormat = document.getElementById('questionFormat')?.value;
-                    const questionType = document.getElementById('questionType')?.value; // Eski sistem için
-                    
-                    // Soru metni ve açıklama
-                    const questionText = document.getElementById('questionText')?.value?.trim();
-                    const questionInstruction = document.getElementById('questionInstruction')?.value?.trim();
-                    const correctAnswer = document.getElementById('questionCorrectAnswer')?.value?.trim() || null;
-                    
-                    if (!questionText) {
-                        showAlert('questionModalAlert', 'Lütfen soru metnini girin', 'error');
+                    // Global duplicate submit kontrolü
+                    if (questionFormSubmitting) {
+                        console.log('⚠️ Zaten kaydediliyor, duplicate submit engellendi');
                         return;
                     }
                     
-                    // Resim ve ses dosyalarını hazırla
-                    const imageFileId = selectedImageFile?.fileId || null;
-                    const audioFileId = selectedAudioFile?.fileId || null;
-                    
-                    // Media files array'i oluştur
-                    const mediaFiles = [];
-                    if (imageFileId) {
-                        mediaFiles.push({
-                            fileId: imageFileId,
-                            mediaType: 'Image',
-                            order: 0
-                        });
-                    }
-                    if (audioFileId) {
-                        mediaFiles.push({
-                            fileId: audioFileId,
-                            mediaType: 'Audio',
-                            order: imageFileId ? 1 : 0
-                        });
+                    // Token kontrolü
+                    currentToken = localStorage.getItem('adminToken');
+                    if (!currentToken) {
+                        showAlert('questionModalAlert', 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.', 'error');
+                        setTimeout(() => {
+                            logout();
+                        }, 2000);
+                        return;
                     }
                     
-                    // Media type'ı belirle
-                    let finalMediaType = 'None';
-                    if (imageFileId) {
-                        finalMediaType = 'Image';
-                    } else if (audioFileId) {
-                        finalMediaType = 'Audio';
+                    // Loading state - butonu devre dışı bırak
+                    const submitButton = questionForm.querySelector('button[type="submit"]');
+                    const originalButtonText = submitButton?.textContent || 'Kaydet';
+                    
+                    if (submitButton) {
+                        submitButton.setAttribute('data-original-text', originalButtonText);
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Kaydediliyor...';
                     }
                     
-                    // İçerik objesi (DRAG_DROP için)
-                    let contentObject = null;
-                    const contentObjectText = document.getElementById('questionContentObject')?.value?.trim();
-                    if (contentObjectText) {
-                        try {
-                            contentObject = JSON.parse(contentObjectText);
-                        } catch (e) {
-                            showAlert('questionModalAlert', 'İçerik objesi geçerli bir JSON formatında olmalıdır', 'error');
+                    // Global submit flag'ini set et
+                    questionFormSubmitting = true;
+                    
+                    try {
+                        // Soru formatını al (yeni sistem)
+                        const questionFormat = document.getElementById('questionFormat')?.value;
+                        const questionType = document.getElementById('questionType')?.value; // Eski sistem için
+                        
+                        // Soru metni ve açıklama
+                        const questionText = document.getElementById('questionText')?.value?.trim();
+                        const questionInstruction = document.getElementById('questionInstruction')?.value?.trim();
+                        const correctAnswer = document.getElementById('questionCorrectAnswer')?.value?.trim() || null;
+                        
+                        if (!questionText) {
+                            showAlert('questionModalAlert', 'Lütfen soru metnini girin', 'error');
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.textContent = originalButtonText;
+                            }
                             return;
                         }
-                    }
-                    
-                    // Soru verisini oluştur (yeni format destekli)
-                    const questionData = {
-                        activity: document.getElementById('questionActivity').value,
-                        questionFormat: questionFormat || null, // Yeni format
-                        questionType: questionFormat || questionType, // Format yoksa eski tipi kullan
-                        correctAnswer: correctAnswer,
-                        mediaFileId: imageFileId || audioFileId || null,
-                        mediaType: finalMediaType,
-                        mediaStorage: (imageFileId || audioFileId) ? 'GridFS' : 'None',
-                        mediaFiles: mediaFiles,
-                        data: {
-                            questionText: questionText,
-                            instruction: questionInstruction || null,
-                            audioFileId: audioFileId || null,
-                            imageFileId: imageFileId || null,
-                            contentObject: contentObject || null
+                        
+                        // Resim ve ses dosyalarını hazırla
+                        const imageFileId = selectedImageFile?.fileId || null;
+                        const audioFileId = selectedAudioFile?.fileId || null;
+                        
+                        // Media files array'i oluştur
+                        const mediaFiles = [];
+                        if (imageFileId) {
+                            mediaFiles.push({
+                                fileId: imageFileId,
+                                mediaType: 'Image',
+                                order: 0
+                            });
                         }
-                    };
+                        if (audioFileId) {
+                            mediaFiles.push({
+                                fileId: audioFileId,
+                                mediaType: 'Audio',
+                                order: imageFileId ? 1 : 0
+                            });
+                        }
+                        
+                        // Media type'ı belirle
+                        let finalMediaType = 'None';
+                        if (imageFileId) {
+                            finalMediaType = 'Image';
+                        } else if (audioFileId) {
+                            finalMediaType = 'Audio';
+                        }
+                        
+                        // İçerik objesi (DRAG_DROP için)
+                        let contentObject = null;
+                        const contentObjectText = document.getElementById('questionContentObject')?.value?.trim();
+                        if (contentObjectText) {
+                            try {
+                                contentObject = JSON.parse(contentObjectText);
+                            } catch (e) {
+                                showAlert('questionModalAlert', 'İçerik objesi geçerli bir JSON formatında olmalıdır', 'error');
+                                if (submitButton) {
+                                    submitButton.disabled = false;
+                                    submitButton.textContent = originalButtonText;
+                                }
+                                return;
+                            }
+                        }
+                        
+                        // Soru verisini oluştur (yeni format destekli)
+                        const activityId = document.getElementById('questionActivity').value;
+                        const lessonId = document.getElementById('questionLesson').value;
+                        
+                        // En az birini seçmeli
+                        if (!activityId && !lessonId) {
+                            showAlert('questionModalAlert', 'Lütfen en az bir etkinlik veya ders seçin', 'error');
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.textContent = originalButtonText;
+                            }
+                            return;
+                        }
+                        
+                        const questionData = {
+                            activity: activityId || null,
+                            lesson: lessonId || null,
+                            questionLevel: lessonId ? 'Lesson' : (activityId ? 'Activity' : null),
+                            questionFormat: questionFormat || null, // Yeni format
+                            questionType: questionFormat || questionType, // Format yoksa eski tipi kullan
+                            correctAnswer: correctAnswer,
+                            mediaFileId: imageFileId || audioFileId || null,
+                            mediaType: finalMediaType,
+                            mediaStorage: (imageFileId || audioFileId) ? 'GridFS' : 'None',
+                            mediaFiles: mediaFiles,
+                            data: {
+                                questionText: questionText,
+                                instruction: questionInstruction || null,
+                                audioFileId: audioFileId || null,
+                                imageFileId: imageFileId || null,
+                                contentObject: contentObject || null
+                            }
+                        };
 
-                    if (!questionData.activity) {
-                        showAlert('questionModalAlert', 'Lütfen bir aktivite seçin', 'error');
-                        return;
-                    }
-
-                    try {
                         const url = currentQuestionId ? `${API_BASE}/content/question/${currentQuestionId}` : `${API_BASE}/content/question`;
                         const method = currentQuestionId ? 'PUT' : 'POST';
                         
                         console.log('Soru verisi gönderiliyor:', questionData);
+                        console.log('API URL:', url);
+                        console.log('Method:', method);
+                        console.log('Token:', currentToken ? 'Mevcut' : 'YOK!');
 
                         const response = await fetch(url, {
                             method,
@@ -2183,18 +2253,58 @@
                             body: JSON.stringify(questionData)
                         });
 
-                        const data = await response.json();
+                        let data;
+                        try {
+                            data = await response.json();
+                        } catch (jsonError) {
+                            console.error('JSON parse hatası:', jsonError);
+                            const responseText = await response.text();
+                            console.error('Response text:', responseText);
+                            showAlert('questionModalAlert', `Sunucu hatası: ${response.status} ${response.statusText}`, 'error');
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.textContent = originalButtonText;
+                            }
+                            return;
+                        }
+
+                        if (!response.ok) {
+                            const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+                            const errorDetails = data.errors ? JSON.stringify(data.errors) : '';
+                            showAlert('questionModalAlert', `Hata: ${errorMessage}${errorDetails ? ' - ' + errorDetails : ''}`, 'error');
+                            console.error('Soru kaydetme hatası:', data);
+                            console.error('Response status:', response.status);
+                            console.error('Response headers:', response.headers);
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.textContent = originalButtonText;
+                            }
+                            return;
+                        }
+
                         if (data.success) {
-                            showAlert('questionModalAlert', data.message, 'success');
+                            showAlert('questionModalAlert', data.message || 'Soru başarıyla kaydedildi', 'success');
                             setTimeout(() => {
                                 closeQuestionModal();
                                 if (typeof loadQuestions === 'function') loadQuestions();
                             }, 1500);
                         } else {
-                            showAlert('questionModalAlert', data.message, 'error');
+                            const errorMessage = data.message || 'Bilinmeyen hata';
+                            showAlert('questionModalAlert', errorMessage, 'error');
                         }
                     } catch (error) {
-                        showAlert('questionModalAlert', 'Hata: ' + error.message, 'error');
+                        console.error('Soru kaydetme hatası:', error);
+                        showAlert('questionModalAlert', 'Bağlantı hatası: ' + error.message, 'error');
+                    } finally {
+                        // Loading state'i kaldır - butonu tekrar aktif et
+                        const submitButton = newForm.querySelector('button[type="submit"]');
+                        const originalButtonText = submitButton?.getAttribute('data-original-text') || 'Kaydet';
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = originalButtonText;
+                        }
+                        // Global submit flag'ini sıfırla
+                        questionFormSubmitting = false;
                     }
                 });
             }
@@ -2976,21 +3086,37 @@
 
         async function loadActivitiesForContent() {
             try {
-                const response = await fetch(`${API_BASE}/activities?limit=1000`, {
+                // Etkinlikleri yükle
+                const activitiesResponse = await fetch(`${API_BASE}/activities?limit=1000`, {
                     headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
-                const data = await response.json();
-                if (data.success) {
+                const activitiesData = await activitiesResponse.json();
+                if (activitiesData.success) {
                     const questionActivitySelect = document.getElementById('questionActivity');
                     if (questionActivitySelect) {
-                        questionActivitySelect.innerHTML = '<option value="">Aktivite Seçin</option>';
-                        data.data.forEach(activity => {
+                        questionActivitySelect.innerHTML = '<option value="">Etkinlik Seçin (Opsiyonel)</option>';
+                        activitiesData.data.forEach(activity => {
                             questionActivitySelect.innerHTML += `<option value="${activity._id}">${activity.title}</option>`;
                         });
                     }
                 }
+                
+                // Dersleri yükle
+                const lessonsResponse = await fetch(`${API_BASE}/content/lessons`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const lessonsData = await lessonsResponse.json();
+                if (lessonsData.success) {
+                    const questionLessonSelect = document.getElementById('questionLesson');
+                    if (questionLessonSelect) {
+                        questionLessonSelect.innerHTML = '<option value="">Ders Seçin (Opsiyonel)</option>';
+                        lessonsData.data.forEach(lesson => {
+                            questionLessonSelect.innerHTML += `<option value="${lesson._id}">${lesson.title}</option>`;
+                        });
+                    }
+                }
             } catch (error) {
-                console.error('Aktiviteler yüklenemedi:', error);
+                console.error('Etkinlikler veya dersler yüklenemedi:', error);
             }
         }
 
@@ -3478,30 +3604,61 @@
         }
 
         function renderQuestionsTable(questions, pagination) {
-            let html = '<table><thead><tr><th>Soru Tipi</th><th>Aktivite</th><th>Medya Tipi</th><th>Oluşturulma</th><th>İşlemler</th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>Soru Tipi</th><th>Etkinlik/Ders</th><th>Medya Tipi</th><th>Oluşturan</th><th>Oluşturulma</th><th>İşlemler</th></tr></thead><tbody>';
             
-            questions.forEach(question => {
-                const activity = question.activity || {};
-                const typeLabels = {
-                    'Image': 'Resim',
-                    'Audio': 'Ses',
-                    'Video': 'Video',
-                    'Drawing': 'Çizim',
-                    'Text': 'Metin'
-                };
-                html += `
-                    <tr>
-                        <td><span class="badge badge-teacher">${typeLabels[question.questionType] || question.questionType}</span></td>
-                        <td>${activity.title || '-'}</td>
-                        <td>${question.mediaType || 'None'}</td>
-                        <td>${new Date(question.createdAt).toLocaleDateString('tr-TR')}</td>
-                        <td class="actions">
-                            <button class="btn btn-primary btn-sm" onclick="editQuestion('${question._id}')">Düzenle</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${question._id}')">Sil</button>
-                        </td>
-                    </tr>
-                `;
-            });
+            if (!questions || questions.length === 0) {
+                html += '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Henüz soru eklenmemiş.</td></tr>';
+            } else {
+                questions.forEach(question => {
+                    const activity = question.activity || {};
+                    const lesson = question.lesson || {};
+                    const creator = question.createdBy || {};
+                    const creatorName = creator.firstName && creator.lastName 
+                        ? `${creator.firstName} ${creator.lastName}` 
+                        : (creator.email || 'Bilinmiyor');
+                    const typeLabels = {
+                        'Image': 'Resim',
+                        'Audio': 'Ses',
+                        'Video': 'Video',
+                        'Drawing': 'Çizim',
+                        'Text': 'Metin',
+                        'ONLY_TEXT': 'Sadece Metin',
+                        'AUDIO_TEXT': 'Ses + Metin',
+                        'IMAGE_TEXT': 'Resim + Metin',
+                        'AUDIO_IMAGE_TEXT': 'Ses + Resim + Metin',
+                        'DRAG_DROP': 'Sürükle-Bırak'
+                    };
+                    
+                    // Soru tipini belirle (yeni format öncelikli)
+                    const questionType = question.questionFormat || question.questionType || 'Bilinmiyor';
+                    const typeLabel = typeLabels[questionType] || questionType;
+                    
+                    // Etkinlik veya Ders bilgisini göster
+                    let activityLessonInfo = '-';
+                    if (activity.title) {
+                        activityLessonInfo = `📋 Etkinlik: ${activity.title}`;
+                    }
+                    if (lesson.title) {
+                        activityLessonInfo = activityLessonInfo !== '-' 
+                            ? `${activityLessonInfo}<br>📚 Ders: ${lesson.title}`
+                            : `📚 Ders: ${lesson.title}`;
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td><span class="badge badge-teacher">${typeLabel}</span></td>
+                            <td>${activityLessonInfo}</td>
+                            <td>${question.mediaType || 'None'}</td>
+                            <td>${creatorName}</td>
+                            <td>${new Date(question.createdAt).toLocaleDateString('tr-TR')}</td>
+                            <td class="actions">
+                                <button class="btn btn-primary btn-sm" onclick="editQuestion('${question._id}')">Düzenle</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${question._id}')">Sil</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
             
             html += '</tbody></table>';
             document.getElementById('questionsTable').innerHTML = html;
@@ -3526,6 +3683,9 @@
             selectedAudioFile = null;
             selectedMediaFiles = [];
             
+            // Submit flag'ini sıfırla (modal açıldığında)
+            questionFormSubmitting = false;
+            
             if (title) title.textContent = questionId ? 'Soru Düzenle' : 'Yeni Soru';
             
             // Formu sıfırla ve varsayılan formatı ayarla
@@ -3548,22 +3708,74 @@
 
         async function loadQuestionData(questionId) {
             try {
-                const response = await fetch(`${API_BASE}/content/questions`, {
+                // Önce tüm soruları çek (mevcut endpoint)
+                const response = await fetch(`${API_BASE}/content/questions?page=1&limit=1000`, {
                     headers: { 'Authorization': `Bearer ${currentToken}` }
                 });
                 const data = await response.json();
                 if (data.success) {
                     const question = data.data.find(q => q._id === questionId);
                     if (question) {
-                        const activityId = question.activity._id || question.activity;
-                        document.getElementById('questionActivity').value = activityId;
-                        document.getElementById('questionType').value = question.questionType;
-                        document.getElementById('questionCorrectAnswer').value = question.correctAnswer || '';
+                        const activityId = question.activity ? (question.activity._id || question.activity) : null;
+                        const lessonId = question.lesson ? (question.lesson._id || question.lesson) : null;
+                        
+                        // Activity seçimi
+                        const activitySelect = document.getElementById('questionActivity');
+                        if (activitySelect && activityId) {
+                            activitySelect.value = activityId;
+                        }
+                        
+                        // Lesson seçimi
+                        const lessonSelect = document.getElementById('questionLesson');
+                        if (lessonSelect && lessonId) {
+                            lessonSelect.value = lessonId;
+                        }
+                        
+                        // Question Format (yeni sistem) veya Question Type (eski sistem)
+                        const questionFormatSelect = document.getElementById('questionFormat');
+                        const questionTypeSelect = document.getElementById('questionType');
+                        
+                        // Önce questionFormat'i kontrol et (yeni sistem)
+                        if (questionFormatSelect && question.questionFormat) {
+                            questionFormatSelect.value = question.questionFormat;
+                            // Format değiştiğinde form alanlarını güncelle
+                            handleQuestionFormatChange();
+                        } else if (questionTypeSelect && question.questionType) {
+                            // Eski sistem için questionType kullan
+                            questionTypeSelect.value = question.questionType;
+                            // Eğer questionFormat yoksa, questionType'a göre set et
+                            if (questionFormatSelect) {
+                                // Eski tipi yeni formata map et
+                                const typeToFormatMap = {
+                                    'Text': 'ONLY_TEXT',
+                                    'Audio': 'AUDIO_TEXT',
+                                    'Image': 'IMAGE_TEXT',
+                                    'Video': 'AUDIO_IMAGE_TEXT',
+                                    'Drawing': 'DRAG_DROP'
+                                };
+                                const mappedFormat = typeToFormatMap[question.questionType] || 'ONLY_TEXT';
+                                questionFormatSelect.value = mappedFormat;
+                                handleQuestionFormatChange();
+                            }
+                        }
+                        
+                        // Correct Answer
+                        const correctAnswerInput = document.getElementById('questionCorrectAnswer');
+                        if (correctAnswerInput) {
+                            correctAnswerInput.value = question.correctAnswer || '';
+                        }
                         
                         // Soru metni ve açıklama
                         if (question.data) {
-                            document.getElementById('questionText').value = question.data.questionText || '';
-                            document.getElementById('questionInstruction').value = question.data.instruction || '';
+                            const questionTextInput = document.getElementById('questionText');
+                            if (questionTextInput) {
+                                questionTextInput.value = question.data.questionText || '';
+                            }
+                            
+                            const questionInstructionInput = document.getElementById('questionInstruction');
+                            if (questionInstructionInput) {
+                                questionInstructionInput.value = question.data.instruction || '';
+                            }
                             
                             // Ses dosyası ID'si
                             if (question.data.audioFileId) {
@@ -3585,7 +3797,11 @@
                             };
                             renderSelectedImageFile();
                         }
+                    } else {
+                        showAlert('questionModalAlert', 'Soru bulunamadı', 'error');
                     }
+                } else {
+                    showAlert('questionModalAlert', data.message || 'Soru yüklenemedi', 'error');
                 }
             } catch (error) {
                 showAlert('questionModalAlert', 'Soru yüklenirken hata: ' + error.message, 'error');
@@ -3608,7 +3824,27 @@
 
         async function deleteQuestion(questionId) {
             if (!confirm('Bu soruyu silmek istediğinize emin misiniz?')) return;
-            showAlert('questionsAlert', 'Soru silme özelliği yakında eklenecek', 'error');
+            
+            try {
+                const response = await fetch(`${API_BASE}/content/question/${questionId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('questionsAlert', 'Soru başarıyla silindi', 'success');
+                    loadQuestions(currentPageQuestions || 1);
+                } else {
+                    showAlert('questionsAlert', data.message || 'Soru silinemedi', 'error');
+                }
+            } catch (error) {
+                console.error('Soru silme hatası:', error);
+                showAlert('questionsAlert', 'Bağlantı hatası: ' + error.message, 'error');
+            }
         }
 
         // ======================================================================
