@@ -1006,6 +1006,7 @@ router.get('/content/lessons', authenticate, requireAdmin, adminController.getAl
  *         description: Sorular başarıyla getirildi
  */
 router.get('/content/questions', authenticate, requireAdmin, adminController.getAllQuestions);
+router.delete('/content/question/:id', authenticate, requireAdmin, adminController.deleteQuestion);
 
 // 💡 İSTATİSTİK: Admin panel için istatistik endpoint'leri (proxy)
 const statisticsController = require('../controllers/statisticsController');

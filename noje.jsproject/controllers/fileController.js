@@ -101,9 +101,29 @@ exports.downloadFile = async (req, res) => {
         // Dosya stream'ini al
         const fileStream = getFileStream(fileId);
 
+        // Video ve audio dosyaları için özel header'lar
+        const isMediaFile = fileInfo.contentType && (
+            fileInfo.contentType.startsWith('video/') || 
+            fileInfo.contentType.startsWith('audio/')
+        );
+
         // Response header'larını ayarla
-        res.setHeader('Content-Type', fileInfo.contentType);
+        res.setHeader('Content-Type', fileInfo.contentType || 'application/octet-stream');
         res.setHeader('Content-Disposition', `inline; filename="${fileInfo.filename}"`);
+        
+        // Video/Audio için Range Request desteği ve CORS header'ları
+        if (isMediaFile) {
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            res.setHeader('Content-Length', fileInfo.size);
+        }
+
+        // CORS header'larını ekle (video streaming için önemli)
+        // Tüm origin'lere izin ver (development için)
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
 
         // Stream'i response'a pipe et
         fileStream.pipe(res);

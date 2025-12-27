@@ -7,6 +7,7 @@ import 'screens/home_screen.dart';
 import 'screens/student_selection_screen.dart';
 import 'screens/categories_screen.dart';
 import 'screens/groups_screen.dart';
+import 'screens/statistics_screen.dart';
 import 'models/category_model.dart';
 
 void main() async {
@@ -43,6 +44,7 @@ class MyApp extends StatelessWidget {
           '/home': (context) => const HomeScreen(),
           '/student-selection': (context) => const StudentSelectionScreen(),
           '/categories': (context) => const CategoriesScreen(),
+          '/statistics': (context) => const StatisticsScreen(),
           '/groups': (context) {
             final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
             final category = args?['category'] as Category?;

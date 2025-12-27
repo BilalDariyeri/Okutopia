@@ -71,13 +71,19 @@ router.post('/start-session', statisticsController.startSession);
  */
 router.post('/end-session', statisticsController.endSession);
 
+// 💡 ÖNEMLİ: Daha spesifik route'ları daha genel route'lardan ÖNCE tanımla
+// Express route'ları sırayla kontrol eder, bu yüzden /student/:studentId/send-session-email
+// /student/:studentId'den önce gelmelidir
+
 /**
  * @swagger
- * /api/statistics/student/{studentId}:
- *   get:
- *     summary: Öğrenci İstatistiklerini Getirme
+ * /api/statistics/student/{studentId}/send-session-email:
+ *   post:
+ *     summary: Oturum Bazlı İstatistikleri Veliye Email Olarak Gönderme
  *     tags: [Statistics]
- *     description: Öğrencinin günlük ve toplam istatistiklerini getirir
+ *     description: Öğrencinin mevcut oturumdaki aktivitelerini veliye e-posta olarak gönderir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: studentId
@@ -85,19 +91,78 @@ router.post('/end-session', statisticsController.endSession);
  *         schema:
  *           type: string
  *         description: Öğrenci ID'si
- *       - in: query
- *         name: date
- *         schema:
- *           type: string
- *           format: date
- *         description: İstatistiklerin alınacağı tarih (opsiyonel, varsayılan bugün)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               parentEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Veli e-posta adresi (opsiyonel, öğrenci kaydından alınır)
+ *               sessionActivities:
+ *                 type: array
+ *                 description: Oturum aktiviteleri listesi
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     activityId:
+ *                       type: string
+ *                     activityTitle:
+ *                       type: string
+ *                     durationSeconds:
+ *                       type: number
+ *                     successStatus:
+ *                       type: string
+ *               totalDurationSeconds:
+ *                 type: number
+ *                 description: Toplam süre (saniye)
  *     responses:
  *       '200':
- *         description: İstatistikler başarıyla getirildi
+ *         description: Email başarıyla gönderildi
+ *       '400':
+ *         description: Email adresi bulunamadı veya gönderilecek aktivite yok
  *       '404':
  *         description: Öğrenci bulunamadı
  */
-router.get('/student/:studentId', statisticsController.getStudentStatistics);
+router.post('/student/:studentId/send-session-email', authenticate, requireTeacher, statisticsController.sendSessionStatisticsEmail);
+
+/**
+ * @swagger
+ * /api/statistics/student/{studentId}/send-email:
+ *   post:
+ *     summary: İstatistikleri Veliye Email Olarak Gönderme
+ *     tags: [Statistics]
+ *     description: Öğrencinin günlük istatistiklerini veliye e-posta olarak gönderir
+ *     parameters:
+ *       - in: path
+ *         name: studentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Öğrenci ID'si
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               parentEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Veli e-posta adresi (opsiyonel, öğrenci kaydından alınır)
+ *     responses:
+ *       '200':
+ *         description: Email başarıyla gönderildi
+ *       '400':
+ *         description: Email adresi bulunamadı veya gönderilecek istatistik yok
+ *       '404':
+ *         description: Öğrenci bulunamadı
+ */
+router.post('/student/:studentId/send-email', authenticate, requireTeacher, statisticsController.sendStatisticsEmail);
 
 /**
  * @swagger
@@ -136,11 +201,11 @@ router.put('/student/:studentId/parent-email', statisticsController.updateParent
 
 /**
  * @swagger
- * /api/statistics/student/{studentId}/send-email:
- *   post:
- *     summary: İstatistikleri Veliye Email Olarak Gönderme
+ * /api/statistics/student/{studentId}:
+ *   get:
+ *     summary: Öğrenci İstatistiklerini Getirme
  *     tags: [Statistics]
- *     description: Öğrencinin günlük istatistiklerini veliye e-posta olarak gönderir
+ *     description: Öğrencinin günlük ve toplam istatistiklerini getirir
  *     parameters:
  *       - in: path
  *         name: studentId
@@ -148,26 +213,19 @@ router.put('/student/:studentId/parent-email', statisticsController.updateParent
  *         schema:
  *           type: string
  *         description: Öğrenci ID'si
- *     requestBody:
- *       required: false
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               parentEmail:
- *                 type: string
- *                 format: email
- *                 description: Veli e-posta adresi (opsiyonel, öğrenci kaydından alınır)
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: İstatistiklerin alınacağı tarih (opsiyonel, varsayılan bugün)
  *     responses:
  *       '200':
- *         description: Email başarıyla gönderildi
- *       '400':
- *         description: Email adresi bulunamadı veya gönderilecek istatistik yok
+ *         description: İstatistikler başarıyla getirildi
  *       '404':
  *         description: Öğrenci bulunamadı
  */
-router.post('/student/:studentId/send-email', authenticate, requireTeacher, statisticsController.sendStatisticsEmail);
+router.get('/student/:studentId', statisticsController.getStudentStatistics);
 
 /**
  * @swagger

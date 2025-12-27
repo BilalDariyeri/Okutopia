@@ -590,7 +590,134 @@ exports.deleteNote = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------
-// 5. Öğretmenin Tüm Notlarını Getirme (Tüm öğrenciler için)
+// 5. Öğrencinin Son Çalışma İstatistiklerini Getirme (Öğretmen Notları için)
+// GET /api/teacher-notes/student/:studentId/last-session
+// ---------------------------------------------------------------------
+exports.getStudentLastSession = async (req, res) => {
+    const { studentId } = req.params;
+
+    try {
+        // Admin panelinden mi çağrıldı kontrol et
+        const isAdminPanel = req.user && (req.user.role === 'Admin' || req.user.role === 'SuperAdmin');
+        
+        let teacherId = null;
+
+        if (!isAdminPanel) {
+            // Normal öğretmen akışı
+            teacherId = getTeacherIdFromToken(req);
+            if (!teacherId) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Yetkilendirme hatası: Token bulunamadı veya geçersiz.'
+                });
+            }
+
+            // Öğretmeni kontrol et
+            const teacher = await User.findById(teacherId).select('role').lean();
+            if (!teacher || (teacher.role !== 'Teacher' && teacher.role !== 'Admin' && teacher.role !== 'SuperAdmin')) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Bu işlem için öğretmen yetkisi gereklidir.'
+                });
+            }
+
+            // Öğretmenin bu öğrenciye erişimi var mı kontrol et (Classroom'dan)
+            const Classroom = require('../models/classroom');
+            const classroom = await Classroom.findOne({
+                teacher: teacherId,
+                students: studentId
+            }).lean();
+
+            if (!classroom) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Bu öğrenciye erişim yetkiniz yok.'
+                });
+            }
+        }
+
+        // Öğrenciyi kontrol et
+        const student = await User.findById(studentId)
+            .select('firstName lastName role lastSessionStats')
+            .lean();
+
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: 'Öğrenci bulunamadı.'
+            });
+        }
+
+        if (student.role !== 'Student') {
+            return res.status(400).json({
+                success: false,
+                message: 'Bu kullanıcı bir öğrenci değil.'
+            });
+        }
+
+        // Son çalışma istatistiklerini formatla
+        const lastSession = student.lastSessionStats || {};
+        const activities = lastSession.activities || [];
+        
+        // Süreyi formatla
+        const formatTime = (seconds) => {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}s ${minutes}dk ${secs}sn`;
+            } else if (minutes > 0) {
+                return `${minutes}dk ${secs}sn`;
+            } else {
+                return `${secs}sn`;
+            }
+        };
+
+        logger.info('Öğrenci son çalışma istatistikleri getirildi', {
+            studentId: studentId,
+            activityCount: activities.length,
+            totalDuration: lastSession.totalDurationSeconds || 0
+        });
+
+        res.status(200).json({
+            success: true,
+            student: {
+                id: student._id,
+                firstName: student.firstName,
+                lastName: student.lastName
+            },
+            lastSession: {
+                totalDurationSeconds: lastSession.totalDurationSeconds || 0,
+                totalDurationFormatted: formatTime(lastSession.totalDurationSeconds || 0),
+                activities: activities.map(activity => ({
+                    activityId: activity.activityId,
+                    activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
+                    durationSeconds: activity.durationSeconds || 0,
+                    durationFormatted: formatTime(activity.durationSeconds || 0),
+                    completedAt: activity.completedAt,
+                    successStatus: activity.successStatus
+                })),
+                sessionStartTime: lastSession.sessionStartTime,
+                lastUpdated: lastSession.lastUpdated
+            }
+        });
+    } catch (error) {
+        logger.error('Son çalışma istatistikleri getirme hatası', {
+            studentId: studentId,
+            error: error.message
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Son çalışma istatistikleri yüklenemedi.',
+            error: error.message
+        });
+    }
+};
+
+// ---------------------------------------------------------------------
+// 6. Öğretmenin Tüm Notlarını Getirme (Tüm öğrenciler için)
 // GET /api/teacher-notes/teacher
 // ---------------------------------------------------------------------
 exports.getTeacherNotes = async (req, res) => {
