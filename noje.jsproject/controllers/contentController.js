@@ -4,7 +4,8 @@ const Group = require('../models/group');
 const Lesson = require('../models/lesson');
 const Activity = require('../models/activity');
 const MiniQuestion = require('../models/miniQuestion');
-const Progress = require('../models/Progress'); 
+const Progress = require('../models/Progress');
+const logger = require('../config/logger'); 
 
 // ======================================================================
 // I. CRUD (Oluşturma) Rotasyonları
@@ -222,9 +223,9 @@ exports.getQuestionsForActivity = async (req, res) => {
         const skip = (page - 1) * limit;
         const actualLimit = Math.min(limit, 100);
         
+        // Activity'ye bağlı soruları getir (questionLevel kontrolü olmadan)
         const questions = await MiniQuestion.find({ 
-            activity: activityId,
-            questionLevel: 'Activity' // Sadece aktivite seviyesindeki sorular
+            activity: activityId
         })
             .lean() // 💡 PERFORMANS: lean() kullanarak daha hızlı
             .skip(skip)
@@ -232,9 +233,10 @@ exports.getQuestionsForActivity = async (req, res) => {
             .sort({ createdAt: 1 });
         
         const total = await MiniQuestion.countDocuments({ 
-            activity: activityId,
-            questionLevel: 'Activity'
+            activity: activityId
         });
+        
+        logger.info(`📊 Activity ${activityId} için ${total} soru bulundu`);
         
         res.status(200).json({
             success: true,
@@ -263,9 +265,9 @@ exports.getQuestionsForLesson = async (req, res) => {
         const skip = (page - 1) * limit;
         const actualLimit = Math.min(limit, 100);
         
+        // Lesson'a bağlı soruları getir (questionLevel kontrolü olmadan)
         const questions = await MiniQuestion.find({ 
-            lesson: lessonId,
-            questionLevel: 'Lesson' // Sadece ders seviyesindeki sorular
+            lesson: lessonId
         })
             .lean()
             .skip(skip)
@@ -273,9 +275,10 @@ exports.getQuestionsForLesson = async (req, res) => {
             .sort({ createdAt: 1 });
         
         const total = await MiniQuestion.countDocuments({ 
-            lesson: lessonId,
-            questionLevel: 'Lesson'
+            lesson: lessonId
         });
+        
+        logger.info(`📊 Lesson ${lessonId} için ${total} soru bulundu`);
         
         res.status(200).json({
             success: true,
@@ -668,7 +671,7 @@ exports.completeActivity = async (req, res) => {
             progress
         });
     } catch (error) {
-        console.error('Aktivite tamamlama hatası:', error);
+        logger.error('Aktivite tamamlama hatası:', error);
         res.status(400).json({ 
             success: false,
             message: 'İlerleme kaydedilemedi.', 
