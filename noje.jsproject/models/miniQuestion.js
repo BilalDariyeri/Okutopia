@@ -48,14 +48,14 @@ const MiniQuestionSchema = new Schema({
     // 2. Soru Tipi: Uygulamanın hangi arayüzü kullanacağını belirler
     questionType: {
         type: String,
-        enum: ['Image', 'Audio', 'Video', 'Drawing', 'Text', 'ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP'], 
+        enum: ['Image', 'Audio', 'Video', 'Drawing', 'Text', 'ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP', 'KELIMEDE_HARF_BULMA'], 
         required: true
     },
     
     // 💡 YENİ: Soru Formatı (dinamik soru tipleri için)
     questionFormat: {
         type: String,
-        enum: ['ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP'],
+        enum: ['ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP', 'KELIMEDE_HARF_BULMA'],
         required: false // Opsiyonel (geriye uyumluluk için)
     },
     
@@ -95,6 +95,13 @@ const MiniQuestionSchema = new Schema({
     correctAnswer: {
         type: String, 
         required: false, // Artık optional (kod yazma etkinlikleri için)
+        default: null
+    },
+    
+    // 💡 ADMIN: Sadece admin panelinde görünen aktivite ismi/notu
+    adminNote: {
+        type: String,
+        required: false,
         default: null
     }
 }, {
