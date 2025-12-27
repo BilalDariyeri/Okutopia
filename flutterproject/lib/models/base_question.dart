@@ -48,6 +48,9 @@ abstract class BaseQuestion {
       case 'DRAG_DROP':
       case 'Drawing':
         return DragDropQuestion.fromJson(json);
+      case 'KELIMEDE_HARF_BULMA':
+      case 'LETTER_FIND':
+        return LetterFindQuestion.fromJson(json);
       default:
         return OnlyTextQuestion.fromJson(json);
     }
@@ -379,6 +382,91 @@ class DragDropQuestion implements BaseQuestion {
         'questionText': questionText,
         'instruction': instruction,
         'contentObject': contentObject,
+      },
+    };
+  }
+}
+
+/// Kelimede Harf Bulma Sorusu
+class LetterFindQuestion implements BaseQuestion {
+  @override
+  final String id;
+  @override
+  final String activityId;
+  @override
+  final String questionType = 'KELIMEDE_HARF_BULMA';
+  @override
+  final String? questionText;
+  @override
+  final String? instruction;
+  @override
+  final String? correctAnswer;
+  final String? imageFileId;
+  final String? imageUrl;
+  final String? audioFileId;
+  final List<Map<String, dynamic>>? words; // Kelimeler listesi
+
+  LetterFindQuestion({
+    required this.id,
+    required this.activityId,
+    this.questionText,
+    this.instruction,
+    this.correctAnswer,
+    this.imageFileId,
+    this.imageUrl,
+    this.audioFileId,
+    this.words,
+  });
+
+  factory LetterFindQuestion.fromJson(Map<String, dynamic> json) {
+    // contentObject'ten kelimeler listesini al
+    final contentObject = json['data']?['contentObject'];
+    List<Map<String, dynamic>>? wordsList;
+    
+    if (contentObject != null && contentObject is Map) {
+      if (contentObject['words'] != null && contentObject['words'] is List) {
+        wordsList = (contentObject['words'] as List)
+            .map((w) => Map<String, dynamic>.from(w))
+            .toList();
+      }
+    }
+
+    return LetterFindQuestion(
+      id: json['_id'] ?? json['id'] ?? '',
+      activityId: json['activity'] is String
+          ? json['activity']
+          : json['activity']?['_id'] ?? json['activity']?['id'] ?? '',
+      questionText: json['data']?['questionText'],
+      instruction: json['data']?['instruction'],
+      correctAnswer: json['correctAnswer'] ?? json['data']?['targetLetter'],
+      imageFileId: json['mediaFileId'] ?? json['data']?['imageFileId'],
+      imageUrl: json['mediaUrl'],
+      audioFileId: json['data']?['audioFileId'],
+      words: wordsList,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'activity': activityId,
+      'questionType': questionType,
+      'questionFormat': questionType,
+      'correctAnswer': correctAnswer,
+      'mediaFileId': imageFileId,
+      'mediaUrl': imageUrl,
+      'mediaType': imageFileId != null ? 'Image' : 'None',
+      'mediaStorage': imageFileId != null ? 'GridFS' : 'None',
+      'data': {
+        'questionText': questionText,
+        'instruction': instruction,
+        'imageFileId': imageFileId,
+        'audioFileId': audioFileId,
+        'contentObject': {
+          'words': words,
+          'targetLetter': correctAnswer,
+        },
       },
     };
   }

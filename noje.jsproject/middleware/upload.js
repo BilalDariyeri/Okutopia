@@ -46,7 +46,7 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 100 * 1024 * 1024  // 100MB limit (GridFS için yeterli)
+        fileSize: 500 * 1024 * 1024  // 500MB limit (Video dosyaları için artırıldı)
     }
 });
 

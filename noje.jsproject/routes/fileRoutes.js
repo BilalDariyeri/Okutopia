@@ -2,6 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { uploadSingle } = require('../middleware/upload');
 const {
     uploadFile,
@@ -216,11 +217,37 @@ const {
  *       500:
  *         description: Sunucu hatası
  */
+// Multer error handler wrapper
+const handleUpload = (req, res, next) => {
+    uploadSingle(req, res, (err) => {
+        if (err) {
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(413).json({
+                        success: false,
+                        message: 'Dosya çok büyük! Maksimum dosya boyutu: 500MB'
+                    });
+                }
+                return res.status(400).json({
+                    success: false,
+                    message: `Dosya yükleme hatası: ${err.message}`
+                });
+            }
+            // Multer olmayan hatalar (fileFilter'dan gelenler)
+            return res.status(400).json({
+                success: false,
+                message: err.message || 'Dosya yükleme hatası'
+            });
+        }
+        next();
+    });
+};
+
 // ÖNEMLİ: /upload/audio route'u /upload'dan ÖNCE olmalı (daha spesifik route önce)
-router.post('/upload/audio', uploadSingle, uploadFile);
+router.post('/upload/audio', handleUpload, uploadFile);
 
 // Dosya yükleme - Authentication gerekli
-router.post('/upload', uploadSingle, uploadFile);
+router.post('/upload', handleUpload, uploadFile);
 
 /**
  * @swagger
@@ -304,6 +331,15 @@ router.get('/:fileId/info', getFileInfo);
  *       404:
  *         description: Dosya bulunamadı
  */
+
+// OPTIONS request desteği (CORS preflight için)
+router.options('/:fileId', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 saat
+    res.status(204).end();
+});
 
 // ÖNEMLİ: Bu route EN SON olmalı, yoksa diğer route'ları ezer
 router.get('/:fileId', downloadFile);

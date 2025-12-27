@@ -1524,7 +1524,8 @@ exports.createQuestion = async (req, res) => {
             mediaFiles, 
             mediaUrl, 
             mediaType, 
-            mediaStorage 
+            mediaStorage,
+            adminNote // Admin notu
         } = req.body;
 
         // Validation: En az activity veya lesson olmalı
@@ -1569,7 +1570,7 @@ exports.createQuestion = async (req, res) => {
             // Normalize
             normalizedQuestionData = QuestionStrategyFactory.normalize({
                 questionType: finalQuestionType,
-                questionFormat: finalQuestionType,
+                questionFormat: questionFormat || finalQuestionType, // Format'ı ekle
                 activity,
                 lesson,
                 group,
@@ -1591,6 +1592,7 @@ exports.createQuestion = async (req, res) => {
                 group,
                 parentQuestion,
                 questionType: finalQuestionType,
+                questionFormat: questionFormat || finalQuestionType, // Format ekle
                 correctAnswer,
                 data: data || {},
                 mediaFileId,
@@ -1682,9 +1684,11 @@ exports.createQuestion = async (req, res) => {
             lesson: normalizedQuestionData.lesson || null,
             questionLevel: questionLevel,
             questionType: normalizedQuestionData.questionType,
+            questionFormat: normalizedQuestionData.questionFormat || normalizedQuestionData.questionType, // Format ekle
             correctAnswer: normalizedQuestionData.correctAnswer ? 
                 (typeof normalizedQuestionData.correctAnswer === 'string' ? normalizedQuestionData.correctAnswer.trim() : normalizedQuestionData.correctAnswer) : 
                 null,
+            adminNote: adminNote ? adminNote.trim() : null, // Admin notu
             data: normalizedQuestionData.data || {},
             mediaFileId: processedMediaFiles.length > 0 ? processedMediaFiles[0].fileId : (normalizedQuestionData.mediaFileId || null),
             mediaFiles: processedMediaFiles,
@@ -1716,7 +1720,7 @@ exports.createQuestion = async (req, res) => {
 exports.updateQuestion = async (req, res) => {
     try {
         const { id } = req.params;
-        const { activity, lesson, questionType, questionFormat, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage } = req.body;
+        const { activity, lesson, questionType, questionFormat, correctAnswer, data, mediaFileId, mediaFiles, mediaUrl, mediaType, mediaStorage, adminNote } = req.body;
 
         // Soru var mı kontrol et
         const existingQuestion = await MiniQuestion.findById(id);
@@ -1800,6 +1804,8 @@ exports.updateQuestion = async (req, res) => {
         }
         // correctAnswer opsiyonel - Flutter'da kontrol edilecek
         if (correctAnswer !== undefined) updateData.correctAnswer = correctAnswer ? correctAnswer.trim() : null;
+        // Admin notu
+        if (adminNote !== undefined) updateData.adminNote = adminNote ? adminNote.trim() : null;
         if (data !== undefined) updateData.data = data;
         if (mediaUrl !== undefined) updateData.mediaUrl = mediaUrl;
         if (mediaType !== undefined) updateData.mediaType = mediaType;
@@ -1962,6 +1968,44 @@ exports.getAllQuestions = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Sorular getirilirken hata oluştu',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası'
+        });
+    }
+};
+
+// Soru sil
+exports.deleteQuestion = async (req, res) => {
+    try {
+        const questionId = req.params.id;
+
+        if (!questionId || !questionId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Geçersiz soru ID formatı.'
+            });
+        }
+
+        // Soru var mı kontrol et
+        const question = await MiniQuestion.findById(questionId);
+        if (!question) {
+            return res.status(404).json({
+                success: false,
+                message: 'Soru bulunamadı.'
+            });
+        }
+
+        // Soruyu sil
+        await MiniQuestion.findByIdAndDelete(questionId);
+
+        res.status(200).json({
+            success: true,
+            message: 'Soru başarıyla silindi.'
+        });
+    } catch (error) {
+        console.error('deleteQuestion hatası:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Soru silinirken hata oluştu',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Sunucu hatası'
         });
     }
