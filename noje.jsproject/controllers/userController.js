@@ -3,6 +3,7 @@ const User = require('../models/user');
 const Classroom = require(path.resolve(__dirname, '../models/classroom'));
 const Progress = require(path.resolve(__dirname, '../models/Progress'));
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
 
 // JWT token oluşturma yardımcı fonksiyonu
 const generateToken = (userId) => {
@@ -115,20 +116,20 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    console.log('🔍 Login denemesi:', { email: email?.trim()?.toLowerCase() });
+    logger.info('🔍 Login denemesi:', { email: email?.trim()?.toLowerCase() });
     
     // Kullanıcıyı bul (şifre dahil)
     const user = await User.findOne({ email: email?.trim()?.toLowerCase() }).select('+password');
     
     if (!user) {
-      console.error('❌ Kullanıcı bulunamadı:', email);
+      logger.error('❌ Kullanıcı bulunamadı:', email);
       return res.status(401).json({
         success: false,
         message: 'Geçersiz e-posta veya şifre.'
       });
     }
 
-    console.log('✅ Kullanıcı bulundu:', { 
+    logger.info('✅ Kullanıcı bulundu:', { 
       email: user.email, 
       role: user.role, 
       hasPassword: !!user.password 
@@ -136,7 +137,7 @@ exports.login = async (req, res) => {
 
     // Sadece öğretmenler, adminler ve superadminler giriş yapabilir
     if (user.role !== 'Teacher' && user.role !== 'Admin' && user.role !== 'SuperAdmin') {
-      console.error('❌ Geçersiz rol:', user.role);
+      logger.error('❌ Geçersiz rol:', user.role);
       return res.status(401).json({
         success: false,
         message: 'Kullanıcı adı ve şifre hatalı.'
@@ -144,23 +145,23 @@ exports.login = async (req, res) => {
     }
 
     // Şifre kontrolü
-    console.log('🔐 Şifre kontrol ediliyor...');
+    logger.info('🔐 Şifre kontrol ediliyor...');
     const isPasswordMatch = await user.comparePassword(password);
-    console.log('🔐 Şifre eşleşmesi:', isPasswordMatch);
+    logger.info('🔐 Şifre eşleşmesi:', isPasswordMatch);
     
     if (!isPasswordMatch) {
-      console.error('❌ Şifre eşleşmedi');
+      logger.error('❌ Şifre eşleşmedi');
       return res.status(401).json({
         success: false,
         message: 'Geçersiz e-posta veya şifre.'
       });
     }
 
-    console.log('✅ Şifre doğru, token oluşturuluyor...');
+    logger.info('✅ Şifre doğru, token oluşturuluyor...');
 
     // Token oluştur (ObjectId'yi string'e çevir)
     const token = generateToken(user._id.toString());
-    console.log('✅ Token oluşturuldu');
+    logger.info('✅ Token oluşturuldu');
 
     // Öğretmenin sınıfını bul ve populate et (lean() ile optimize)
     const teacherClassroom = await Classroom.findOne({ teacher: user._id })
@@ -289,35 +290,35 @@ exports.addStudentToMyClassroom = async (req, res) => {
     
     // MongoDB'ye direkt students koleksiyonuna ekle (transaction içinde)
     try {
-      console.log('🔄 Öğrenci students koleksiyonuna ekleniyor:', studentData);
+      logger.info('🔄 Öğrenci students koleksiyonuna ekleniyor:', studentData);
       const insertResult = await mongoose.connection.db.collection('students').insertOne(studentData, { session });
       if (!insertResult.insertedId) {
         throw new Error('Students koleksiyonuna ekleme başarısız oldu');
       }
       // 💡 LOG: Başarılı ekleme
-      console.log('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
+      logger.info('✅ Öğrenci students koleksiyonuna başarıyla eklendi:', insertResult.insertedId);
     } catch (insertError) {
       // Eğer duplicate key hatası varsa (aynı _id zaten varsa), devam et
       if (insertError.code === 11000) {
-        console.log('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), devam ediliyor...');
+        logger.info('⚠️ Öğrenci zaten students koleksiyonunda mevcut (duplicate key), devam ediliyor...');
         // Mevcut kaydın role'ünü kontrol et ve güncelle
         try {
           const existingStudent = await mongoose.connection.db.collection('students').findOne({ _id: studentId }, { session });
           if (existingStudent && existingStudent.role !== 'Student') {
-            console.log('⚠️ Mevcut kayıt Student değil, role güncelleniyor...');
+            logger.info('⚠️ Mevcut kayıt Student değil, role güncelleniyor...');
             await mongoose.connection.db.collection('students').updateOne(
               { _id: studentId },
               { $set: { role: 'Student', firstName: newStudent.firstName, lastName: newStudent.lastName, updatedAt: new Date() } },
               { session }
             );
-            console.log('✅ Mevcut kayıt Student olarak güncellendi');
+            logger.info('✅ Mevcut kayıt Student olarak güncellendi');
           }
         } catch (updateError) {
-          console.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
+          logger.error('⚠️ Mevcut kayıt güncellenirken hata:', updateError);
         }
       } else {
         // Diğer hatalar için transaction'ı iptal et
-        console.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
+        logger.error('❌ Students koleksiyonuna ekleme hatası:', insertError);
         await session.abortTransaction();
         session.endSession();
         return res.status(500).json({ 

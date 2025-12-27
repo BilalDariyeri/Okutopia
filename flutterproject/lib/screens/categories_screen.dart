@@ -1,16 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' hide Category;
 import '../services/content_service.dart';
 import '../services/statistics_service.dart';
-import '../services/current_session_service.dart';
 import '../models/category_model.dart';
 import '../providers/auth_provider.dart';
 import 'groups_screen.dart';
-import 'statistics_screen.dart';
-import 'teacher_notes_screen.dart';
-import '../widgets/activity_timer.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -23,15 +18,16 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> with TickerProviderStateMixin {
   final ContentService _contentService = ContentService();
   final StatisticsService _statisticsService = StatisticsService();
-  final CurrentSessionService _sessionService = CurrentSessionService();
   final ScrollController _scrollController = ScrollController();
   List<Category> _categories = [];
   bool _isLoading = true;
   String? _errorMessage;
   
   // Süre takibi
+  bool _isTimerRunning = true;
   DateTime? _sessionStartTime;
   Duration _sessionDuration = Duration.zero;
+  Duration _todayDuration = Duration.zero;
   Timer? _timer;
 
   // Renk paleti (görseldeki renklere göre)
@@ -115,6 +111,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           _sessionDuration = Duration.zero;
         });
         
+        // İstatistikleri yükle (bugünkü süre için)
+        await _loadStatistics(selectedStudent.id);
+        
         // Timer başlat
         _startTimer();
       }
@@ -126,6 +125,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     }
   }
 
+  Future<void> _loadStatistics(String studentId) async {
+    try {
+      final stats = await _statisticsService.getStudentStatistics(studentId);
+      if (!mounted) return;
+      if (stats['success'] == true && stats['dailyStats'] != null) {
+        final dailyStats = stats['dailyStats'];
+        final totalTime = dailyStats['totalTimeSpent'] ?? 0;
+        setState(() {
+          _todayDuration = Duration(seconds: totalTime);
+        });
+      }
+    } catch (e) {
+      debugPrint('İstatistik yükleme hatası: $e');
+    }
+  }
 
   void _startTimer() {
     _timer?.cancel();
@@ -134,7 +148,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
         timer.cancel();
         return;
       }
-      if (_sessionStartTime != null) {
+      if (_isTimerRunning && _sessionStartTime != null) {
         setState(() {
           _sessionDuration = DateTime.now().difference(_sessionStartTime!);
         });
@@ -149,32 +163,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     if (selectedStudent == null) return;
 
     try {
-      // Oturum verilerini hazırla (lastSessionStats güncellemesi için)
-      final sessionService = CurrentSessionService();
-      final sessionActivities = sessionService.getSessionActivities(selectedStudent.id);
-      final totalDuration = sessionService.getSessionTotalDuration(selectedStudent.id);
-      
-      // Oturum aktivitelerini formatla
-      final sessionActivitiesData = sessionActivities.map((activity) {
-        return {
-          'activityId': activity.activityId,
-          'activityTitle': activity.activityTitle,
-          'durationSeconds': activity.durationSeconds,
-          'successStatus': activity.successStatus,
-          'completedAt': activity.completedAt.toIso8601String(),
-        };
-      }).toList();
-      
-      // Oturumu bitir ve lastSessionStats'ı güncelle
-      await _statisticsService.endSession(
-        selectedStudent.id,
-        sessionActivities: sessionActivitiesData,
-        totalDurationSeconds: totalDuration.inSeconds,
-      );
-      
-      debugPrint('✅ Oturum bitirildi ve lastSessionStats güncellendi');
+      // Sadece oturumu bitir, email gönderme işlemi öğretmen tarafından yapılacak
+      await _statisticsService.endSession(selectedStudent.id);
     } catch (e) {
-      debugPrint('❌ Oturum bitirme hatası: $e');
+      debugPrint('Oturum bitirme hatası: $e');
     }
   }
 
@@ -288,7 +280,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                         slivers: [
                           // Üst Header (Pembe gradient bar) - Scroll'da gizlenir
                           SliverAppBar(
-                            expandedHeight: 200,
+                            expandedHeight: 180,
                             floating: false,
                             pinned: false,
                             snap: false,
@@ -522,7 +514,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -532,156 +524,339 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           ),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Üst satır: Geri ok, başlık ve Timer
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.of(context).pop();
-                    } else {
-                      Navigator.of(context).pushReplacementNamed('/student-selection');
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'İçindekiler',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
+        children: [
+          // Üst satır: Geri ok ve başlık
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushReplacementNamed('/student-selection');
+                  }
+                },
+              ),
+              const Expanded(
+                child: Text(
+                  'İçindekiler',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
                   ),
                 ),
-                // Sağ üstte ActivityTimer
-                ActivityTimer(
-                  initialDuration: _sessionDuration,
-                  onTimerUpdate: (duration, isRunning) {
-                    // Timer süresini CurrentSessionService'e kaydet
-                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                    final selectedStudent = authProvider.selectedStudent;
-                    if (selectedStudent != null) {
-                      _sessionService.updateSessionTotalDuration(selectedStudent.id, duration);
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // Alt başlık
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
+              ),
+            ],
+          ),
+          // Alt başlık
+          const Padding(
+            padding: EdgeInsets.only(left: 16, bottom: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
               child: Text(
                 'Eğitim materyallerine kolayca erişin',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: FontWeight.w400,
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            // Öğrenci bilgisi
-            if (selectedStudent != null)
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFFE91E63),
-                          const Color(0xFFAD1457),
-                        ],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        selectedStudent.firstName.isNotEmpty
-                            ? selectedStudent.firstName[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+          ),
+          // Öğrenci bilgisi ve sağ taraftaki bilgiler
+          Row(
+            children: [
+              // Sol: Öğrenci bilgisi (web sitesindeki gibi)
+              if (selectedStudent != null)
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFFE91E63),
+                              const Color(0xFFAD1457),
+                            ],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            selectedStudent.firstName.isNotEmpty
+                                ? selectedStudent.firstName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              selectedStudent.fullName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              authProvider.classroom?.name ?? 'Sınıf',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Yaş: --',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+              const SizedBox(width: 12),
+              // Sağ: Ekran süresi kartı (web sitesindeki gibi)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C2C2C), // Koyu gri
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Ekran Süresi başlığı ve süre
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          selectedStudent.fullName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          authProvider.classroom?.name ?? 'Sınıf',
+                        const Text(
+                          'Ekran Süresi: ',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
+                            color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.w400,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          _formatDuration(_sessionDuration),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Öğrenci Değiştir butonu (daha küçük)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pushReplacementNamed('/student-selection');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2ECC71), // Yeşil
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
+                    const SizedBox(height: 6),
+                    // Bugün ve Bu Oturum
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Bugün: ',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(_todayDuration),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Bu Oturum: ',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(_sessionDuration),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Durdur/Devam butonu
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            if (!mounted) return;
+                            setState(() {
+                              _isTimerRunning = !_isTimerRunning;
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            backgroundColor: _isTimerRunning ? Colors.red : Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isTimerRunning ? Icons.pause : Icons.play_arrow,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _isTimerRunning ? 'Durdur' : 'Devam',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    // Bitti butonu
+                    TextButton(
+                      onPressed: () async {
+                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                        final selectedStudent = authProvider.selectedStudent;
+                        
+                        if (selectedStudent != null) {
+                          try {
+                            // Oturumu bitir ve istatistiğe kaydet
+                            await _statisticsService.endSession(selectedStudent.id);
+                            
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Oturum kaydedildi.'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              
+                              // Öğrenci seçim ekranına dön
+                              Navigator.of(context).pushReplacementNamed('/student-selection');
+                            }
+                          } catch (e) {
+                            debugPrint('Oturum bitirme hatası: $e');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Hata: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Bitti',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    icon: const Icon(Icons.arrow_forward, size: 12),
-                    label: const Text(
-                      'Değiştir',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-          ],
+              const SizedBox(width: 8),
+              // Öğrenci Değiştir butonu
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pushReplacementNamed('/student-selection');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2ECC71), // Yeşil
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_forward, size: 14),
+                label: const Text(
+                  'Öğrenci Değiştir',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
         ),
       ),
     );
   }
 
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(duration.inHours);
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$hours:$minutes:$seconds';
+  }
 
   Widget _buildEmptyState() {
     return Container(
@@ -854,11 +1029,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           Expanded(
             child: GestureDetector(
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const StatisticsScreen(),
-                  ),
-                );
+                // İstatistikler ekranı gelecekte eklenecek
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -881,42 +1052,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
               ),
             ),
           ),
-          // Öğretmen Notları
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const TeacherNotesScreen(),
-                  ),
-                );
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.note,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Notlar',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           // Profil
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // TODO: Profil ekranına git
+                // Profil ekranı gelecekte eklenecek
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

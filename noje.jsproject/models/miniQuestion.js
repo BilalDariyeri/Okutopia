@@ -48,14 +48,14 @@ const MiniQuestionSchema = new Schema({
     // 2. Soru Tipi: Uygulamanın hangi arayüzü kullanacağını belirler
     questionType: {
         type: String,
-        enum: ['Image', 'Audio', 'Video', 'Drawing', 'Text', 'ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP', 'KELIMEDE_HARF_BULMA'], 
+        enum: ['Image', 'Audio', 'Video', 'Drawing', 'Text', 'ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP'], 
         required: true
     },
     
     // 💡 YENİ: Soru Formatı (dinamik soru tipleri için)
     questionFormat: {
         type: String,
-        enum: ['ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP', 'KELIMEDE_HARF_BULMA'],
+        enum: ['ONLY_TEXT', 'AUDIO_TEXT', 'IMAGE_TEXT', 'AUDIO_IMAGE_TEXT', 'DRAG_DROP'],
         required: false // Opsiyonel (geriye uyumluluk için)
     },
     
@@ -98,9 +98,10 @@ const MiniQuestionSchema = new Schema({
         default: null
     },
     
-    // 💡 ADMIN: Sadece admin panelinde görünen aktivite ismi/notu
-    adminNote: {
-        type: String,
+    // 💡 YENİ: Soruyu oluşturan kullanıcı
+    createdBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
         required: false,
         default: null
     }
@@ -125,22 +126,29 @@ MiniQuestionSchema.index({ questionLevel: 1, lesson: 1 });
 MiniQuestionSchema.index({ questionLevel: 1, group: 1 });
 MiniQuestionSchema.index({ questionLevel: 1, parentQuestion: 1 });
 
-// 💡 VALIDATION: En az activity veya lesson olmalı (ikisi de optional ama en az biri zorunlu)
+// 💡 VALIDATION: En az bir ilişki olmalı (activity, lesson, group veya parentQuestion)
+// Özellikle activity veya lesson'dan en az biri zorunlu
 MiniQuestionSchema.pre('validate', function(next) {
     const hasActivity = this.activity != null;
     const hasLesson = this.lesson != null;
+    const hasGroup = this.group != null;
+    const hasParentQuestion = this.parentQuestion != null;
     
     // En az activity veya lesson olmalı (ikisi de optional ama en az biri zorunlu)
-    if (!hasActivity && !hasLesson) {
-        const error = new Error('Soru en az bir seviyeye bağlı olmalıdır. Activity veya lesson\'dan en az biri zorunludur.');
+    if (!hasActivity && !hasLesson && !hasGroup && !hasParentQuestion) {
+        const error = new Error('Soru en az bir seviyeye bağlı olmalıdır (activity, lesson, group veya parentQuestion). Özellikle activity veya lesson\'dan en az biri zorunludur.');
         return next(error);
     }
     
-    // Question level'ı otomatik belirle (öncelik: Activity > Lesson)
-    if (hasActivity && !this.questionLevel) {
-        this.questionLevel = 'Activity';
+    // Question level'ı otomatik belirle
+    if (hasGroup && !this.questionLevel) {
+        this.questionLevel = 'Group';
     } else if (hasLesson && !this.questionLevel) {
         this.questionLevel = 'Lesson';
+    } else if (hasActivity && !this.questionLevel) {
+        this.questionLevel = 'Activity';
+    } else if (hasParentQuestion && !this.questionLevel) {
+        this.questionLevel = 'Nested';
     }
     
     next();

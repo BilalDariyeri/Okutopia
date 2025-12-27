@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/classroom_service.dart';
-import '../services/current_session_service.dart';
 import '../models/student_model.dart';
 import '../models/user_model.dart';
 
@@ -696,12 +695,10 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () async {
-            if (!mounted) return;
-            final navigator = Navigator.of(context);
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.logout();
             if (!mounted) return;
-            navigator.pushReplacementNamed('/login');
+            Navigator.of(context).pushReplacementNamed('/login');
           },
         ),
       ],
@@ -876,22 +873,16 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
 
     return GestureDetector(
       onTap: () async {
-        if (!mounted) return;
         // Öğrenciyi AuthProvider'a kaydet
-        final navigator = Navigator.of(context);
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         authProvider.setSelectedStudent(student);
-        
-        // Oturumu başlat
-        final sessionService = CurrentSessionService();
-        sessionService.startSession(student.id);
         
         // Kısa bir bekleme (geçişi yavaşlatmak için)
         await Future.delayed(const Duration(milliseconds: 400));
         
         // Kategoriler ekranına git
         if (!mounted) return;
-        navigator.pushReplacementNamed('/categories');
+        Navigator.of(context).pushReplacementNamed('/categories');
       },
       child: Container(
         padding: const EdgeInsets.all(10),
@@ -952,10 +943,10 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
                   onSelected: (value) {
                     switch (value) {
                       case 'edit':
-                        // TODO: İsim düzenle
+                        // İsim düzenleme özelliği gelecekte eklenecek
                         break;
                       case 'remove':
-                        // TODO: Sınıftan çıkar
+                        // Sınıftan çıkarma özelliği gelecekte eklenecek
                         break;
                     }
                   },
