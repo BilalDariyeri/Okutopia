@@ -1013,6 +1013,18 @@ router.get('/statistics/teacher/student/:studentId', authenticate, requireAdmin,
  */
 router.post('/statistics/student/:studentId/send-email', authenticate, requireAdmin, statisticsController.sendStatisticsEmail);
 
+/**
+ * @swagger
+ * /api/admin/statistics/student/{studentId}/send-session-email:
+ *   post:
+ *     summary: Admin Panel - Oturum Bazlı İstatistikleri Email Olarak Gönderme
+ *     tags: [Admin]
+ *     description: Admin panelinden öğrencinin oturum bazlı istatistiklerini email olarak gönderir
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/statistics/student/:studentId/send-session-email', authenticate, requireAdmin, statisticsController.sendSessionStatisticsEmail);
+
 // 💡 ÖĞRETMEN NOTLARI: Admin panel için öğretmen notları endpoint'leri (proxy)
 const teacherNoteController = require('../controllers/teacherNoteController');
 

@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const statisticsController = require('../controllers/statisticsController');
-const { authenticate, requireTeacher } = require('../middleware/auth');
+const { authenticate, requireTeacher, requireTeacherOrAdmin } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -127,7 +127,7 @@ router.post('/end-session', statisticsController.endSession);
  *       '404':
  *         description: Öğrenci bulunamadı
  */
-router.post('/student/:studentId/send-session-email', authenticate, requireTeacher, statisticsController.sendSessionStatisticsEmail);
+router.post('/student/:studentId/send-session-email', authenticate, requireTeacherOrAdmin, statisticsController.sendSessionStatisticsEmail);
 
 /**
  * @swagger
@@ -162,7 +162,7 @@ router.post('/student/:studentId/send-session-email', authenticate, requireTeach
  *       '404':
  *         description: Öğrenci bulunamadı
  */
-router.post('/student/:studentId/send-email', authenticate, requireTeacher, statisticsController.sendStatisticsEmail);
+router.post('/student/:studentId/send-email', authenticate, requireTeacherOrAdmin, statisticsController.sendStatisticsEmail);
 
 /**
  * @swagger

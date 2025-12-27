@@ -96,6 +96,17 @@ exports.requireTeacher = (req, res, next) => {
     }
 };
 
+// Öğretmen veya adminlere izin ver (SuperAdmin de dahil)
+exports.requireTeacherOrAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'Teacher' || req.user.role === 'Admin' || req.user.role === 'SuperAdmin')) {
+        next();
+    } else {
+        res.status(403).json({ 
+            message: 'Erişim reddedildi: Bu işlem için öğretmen veya admin yetkisi gereklidir.' 
+        });
+    }
+};
+
 // Sadece öğrencilere izin ver
 exports.requireStudent = (req, res, next) => {
     if (req.user && req.user.role === 'Student') {
