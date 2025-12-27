@@ -114,11 +114,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isWritingBoardQuestion(MiniQuestion question) {
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
-    final questionText = (question.data?['questionText'] ?? '').toString().toUpperCase();
+    final questionType = question.questionType?.toString().toUpperCase() ?? '';
+    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
+    final questionText = question.data?['questionText']?.toString().toUpperCase() ?? '';
     
     return questionFormat == 'YAZI_TAHTASI' ||
         questionType == 'YAZI_TAHTASI' ||
@@ -135,11 +135,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isLetterDottedQuestion(MiniQuestion question) {
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
-    final questionText = (question.data?['questionText'] ?? '').toString().toUpperCase();
+    final questionType = question.questionType?.toString().toUpperCase() ?? '';
+    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
+    final questionText = question.data?['questionText']?.toString().toUpperCase() ?? '';
     
     return questionFormat == 'NOKTALI_YAZIM' ||
         questionType == 'NOKTALI_YAZIM' ||
@@ -159,10 +159,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isLetterDrawingQuestion(MiniQuestion question) {
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
+    final questionType = question.questionType?.toString().toUpperCase() ?? '';
+    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
     
     // Soru metnini al
     final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
@@ -188,10 +188,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isLetterWritingQuestion(MiniQuestion question) {
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
+    final questionType = question.questionType?.toString().toUpperCase() ?? '';
+    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
     
     // Soru metnini al
     final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
@@ -218,10 +218,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isLetterFindQuestion(MiniQuestion question) {
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
+    final questionType = question.questionType?.toString().toUpperCase() ?? '';
+    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title.toString().toUpperCase() ?? '';
     
     // contentObject'te words array'i var mı kontrol et
     final contentObject = question.data?['contentObject'];

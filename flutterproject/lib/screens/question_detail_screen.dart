@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,6 +9,7 @@ import '../config/api_config.dart';
 import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
 import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
 import 'letter_find_screen.dart';
 import 'letter_writing_screen.dart';
 import 'letter_drawing_screen.dart';
@@ -148,15 +148,13 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             ).timeout(
               const Duration(seconds: 5),
               onTimeout: () {
-                debugPrint('Preload timeout (soru ${i + 1})');
+                AppLogger.debug('Preload timeout (soru ${i + 1})');
               },
             );
           } catch (e) {
             // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
             // Bu normal bir durum olabilir, bu yüzden sadece debug modda loglayalım
-            if (kDebugMode) {
-              debugPrint('Preload hatası (soru ${i + 1}): $e');
-            }
+            AppLogger.debug('Preload hatası (soru ${i + 1}): $e');
           }
         });
       }
@@ -186,13 +184,11 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         ).timeout(
           const Duration(seconds: 5),
           onTimeout: () {
-            debugPrint('Preload timeout (sonraki soru)');
+            AppLogger.debug('Preload timeout (sonraki soru)');
           },
         ).catchError((error) {
           // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
-          if (kDebugMode) {
-            debugPrint('Preload hatası: $error');
-          }
+          AppLogger.debug('Preload hatası: $error');
         });
       }
     }
@@ -302,7 +298,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         if (selectedStudent != null && _activityStartTime != null) {
           final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
           final successRate = (_score / widget.questions.length * 100).round();
-          final successStatus = '${_score}/${widget.questions.length} soru doğru (%$successRate)';
+          final successStatus = '$_score/${widget.questions.length} soru doğru (%$successRate)';
           
           _sessionService.addActivity(
             studentId: selectedStudent.id,
@@ -388,17 +384,18 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
     final question = widget.questions[_currentIndex];
     
+    
     // Debug: Soru tipini kontrol et
-    print('🔍 QuestionDetailScreen - Question Type: ${question.questionType}');
-    print('🔍 QuestionDetailScreen - Question Format: ${question.questionFormat}');
-    print('🔍 QuestionDetailScreen - Question Data: ${question.data}');
-    print('🔍 QuestionDetailScreen - Activity Title: ${widget.activity.title}');
+    AppLogger.debug('QuestionDetailScreen - Question Type: ${question.questionType}');
+    AppLogger.debug('QuestionDetailScreen - Question Format: ${question.questionFormat}');
+    AppLogger.debug('QuestionDetailScreen - Question Data: ${question.data}');
+    AppLogger.debug('QuestionDetailScreen - Activity Title: ${widget.activity.title}');
     
     // Kelimede harf bulma soru tipi için özel ekran
-    final questionType = (question.questionType ?? '').toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? question.questionType ?? '').toString().toUpperCase();
-    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
-    final activityTitle = (widget.activity.title ?? '').toString().toUpperCase();
+    final questionType = question.questionType.toString().toUpperCase();
+    final questionFormat = (question.questionFormat ?? question.questionType).toString().toUpperCase() ?? '';
+    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
     
     // contentObject'te words array'i var mı kontrol et
     final contentObject = question.data?['contentObject'];
@@ -408,8 +405,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         contentObject['words'] is List &&
         (contentObject['words'] as List).isNotEmpty;
     
-    print('🔍 Has words array: $hasWordsArray');
-    print('🔍 ContentObject: $contentObject');
+    AppLogger.debug('Has words array: $hasWordsArray');
+    AppLogger.debug('ContentObject: $contentObject');
     
     // Harf yazımı kontrolü (önce harf yazımını kontrol et) - ÇOK AGRESİF
     final questionTextForCheck = _getQuestionText(question);
@@ -507,20 +504,20 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         // contentObject'te words array'i varsa
         hasWordsArray;
     
-    print('🔍 Is Writing Board: $isWritingBoard');
-    print('🔍 Is Letter Dotted: $isLetterDotted');
-    print('🔍 Is Letter Drawing: $isLetterDrawing');
-    print('🔍 Is Letter Writing: $isLetterWriting');
-    print('🔍 Is Letter Find: $isLetterFind');
-    print('🔍 Question Type: "$questionType"');
-    print('🔍 Question Format: "$questionFormat"');
-    print('🔍 Admin Note: "$adminNote"');
-    print('🔍 Activity Title: "$activityTitle"');
-    print('🔍 Has Words Array: $hasWordsArray');
-    print('🔍 ContentObject Type: ${contentObject.runtimeType}');
+    AppLogger.debug('Is Writing Board: $isWritingBoard');
+    AppLogger.debug('Is Letter Dotted: $isLetterDotted');
+    AppLogger.debug('Is Letter Drawing: $isLetterDrawing');
+    AppLogger.debug('Is Letter Writing: $isLetterWriting');
+    AppLogger.debug('Is Letter Find: $isLetterFind');
+    AppLogger.debug('Question Type: "$questionType"');
+    AppLogger.debug('Question Format: "$questionFormat"');
+    AppLogger.debug('Admin Note: "$adminNote"');
+    AppLogger.debug('Activity Title: "$activityTitle"');
+    AppLogger.debug('Has Words Array: $hasWordsArray');
+    AppLogger.debug('ContentObject Type: ${contentObject.runtimeType}');
     
     if (isWritingBoard) {
-      print('✅ LetterWritingBoardScreen\'e yönlendiriliyor...');
+      AppLogger.info('LetterWritingBoardScreen\'e yönlendiriliyor...');
       return LetterWritingBoardScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -529,7 +526,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
     
     if (isLetterDotted) {
-      print('✅ LetterDottedScreen\'e yönlendiriliyor...');
+      AppLogger.info('LetterDottedScreen\'e yönlendiriliyor...');
       return LetterDottedScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -538,7 +535,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
     
     if (isLetterDrawing) {
-      print('✅ LetterDrawingScreen\'e yönlendiriliyor...');
+      AppLogger.info('LetterDrawingScreen\'e yönlendiriliyor...');
       return LetterDrawingScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -547,7 +544,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
     
     if (isLetterWriting) {
-      print('✅ LetterWritingScreen\'e yönlendiriliyor...');
+      AppLogger.info('LetterWritingScreen\'e yönlendiriliyor...');
       return LetterWritingScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -556,7 +553,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
     
     if (isLetterFind) {
-      print('✅ LetterFindScreen\'e yönlendiriliyor...');
+      AppLogger.info('LetterFindScreen\'e yönlendiriliyor...');
       return LetterFindScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -564,7 +561,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       );
     }
     
-    print('⚠️ Normal soru ekranı gösteriliyor - QuestionType: $questionType, Format: $questionFormat');
+    AppLogger.warning('Normal soru ekranı gösteriliyor - QuestionType: $questionType, Format: $questionFormat');
     
     final questionText = questionTextForCheck;
     final instructionText = _getInstructionText(question);

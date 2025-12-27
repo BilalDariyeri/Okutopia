@@ -1,10 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
 
 class LetterFindScreen extends StatefulWidget {
   final Activity activity;
@@ -31,23 +36,28 @@ class _LetterFindScreenState extends State<LetterFindScreen>
   Set<int> _selectedLetters = <int>{};
   bool _showCompletion = false;
   bool _showStartScreen = true;
-  List<AnimationController> _confettiControllers = [];
-  bool _hasLetterInWord = false;
+  final List<AnimationController> _confettiControllers = [];
   bool _hasAnswered = false;
   int _score = 0;
-  final List<Color> _confettiColors = [
-    const Color(0xFFFF6B6B),
-    const Color(0xFF4ECDC4),
-    const Color(0xFF45B7D1),
-    const Color(0xFF96CEB4),
-    const Color(0xFFFFEAA7),
-    const Color(0xFFDDA0DD),
-    const Color(0xFF98D8C8),
-    const Color(0xFFFFB347),
-    const Color(0xFF87CEEB),
-    const Color(0xFFF0E68C),
-    const Color(0xFFFFA07A),
-    const Color(0xFF20B2AA),
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
+  
+  // Color palette for confetti
+  static const List<Color> confettiColors = [
+    Color(0xFFFF6B6B),
+    Color(0xFF4ECDC4),
+    Color(0xFF45B7D1),
+    Color(0xFF96CEB4),
+    Color(0xFFFFEAA7),
+    Color(0xFFDDA0DD),
+    Color(0xFF98D8C8),
+    Color(0xFFFFB347),
+    Color(0xFF87CEEB),
+    Color(0xFFF0E68C),
+    Color(0xFFFFA07A),
+    Color(0xFF20B2AA),
   ];
 
   @override
@@ -56,7 +66,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     _currentWordIndex = widget.currentQuestionIndex;
     _selectedLetters = <int>{};
     _hasAnswered = false;
-    _hasLetterInWord = false;
     _score = 0;
     
     _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
@@ -66,6 +75,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
         });
       }
     });
+    _startActivityTracking();
   }
 
   @override
@@ -75,24 +85,65 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     for (var controller in _confettiControllers) {
       controller.dispose();
     }
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    if (!mounted) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
+      );
+      
+      // Oturum servisine de ekle
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _getWords() {
     final question = widget.questions[widget.currentQuestionIndex];
-    print('🔍 LetterFindScreen - Question ID: ${question.id}');
-    print('🔍 Question Type: ${question.questionType}');
-    print('🔍 Question Format: ${question.questionFormat}');
-    print('🔍 Question Data: ${question.data}');
+    AppLogger.debug('LetterFindScreen - Question ID: ${question.id}');
+    AppLogger.debug('Question Type: ${question.questionType}');
+    AppLogger.debug('Question Format: ${question.questionFormat}');
+    AppLogger.debug('Question Data: ${question.data}');
     
     final contentObject = question.data?['contentObject'];
-    print('🔍 Content Object: $contentObject');
+    AppLogger.debug('Content Object: $contentObject');
     
     if (contentObject != null) {
       if (contentObject is Map) {
         if (contentObject['words'] != null) {
           final words = contentObject['words'];
-          print('🔍 Words found: ${words is List ? words.length : 'not a list'}');
+          AppLogger.debug('Words found: ${words is List ? words.length : 'not a list'}');
           if (words is List) {
             return words.map((w) => Map<String, dynamic>.from(w)).toList();
           }
@@ -100,7 +151,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       }
     }
     
-    print('⚠️ No words found, returning empty list');
+    AppLogger.warning('No words found, returning empty list');
     return [];
   }
 
@@ -175,22 +226,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     return letters.any((letter) => letter.toLowerCase() == targetLetter.toLowerCase());
   }
 
-  void _playSoundAndCheck() {
-    final question = widget.questions[widget.currentQuestionIndex];
-    final audioFileId = question.data?['audioFileId'];
-    
-    if (audioFileId != null) {
-      _playAudio(audioFileId);
-    }
-    
-    // Kelimede harf var mı kontrol et
-    final hasLetter = _checkLetterInWord();
-    setState(() {
-      _hasLetterInWord = hasLetter;
-    });
-  }
-
-
   void _createSmallConfetti(int letterIndex) {
     // Konfeti animasyonu için controller oluştur
     final controller = AnimationController(
@@ -245,7 +280,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
         _currentWordIndex = newIndex;
         _selectedLetters = <int>{}; // Yeni kelime için seçimleri sıfırla
         _hasAnswered = false;
-        _hasLetterInWord = false;
       });
     } else if (direction == 1 && newIndex >= words.length) {
       // Tüm kelimeler tamamlandı
@@ -287,7 +321,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       _selectedLetters = <int>{};
       _showCompletion = false;
       _hasAnswered = false;
-      _hasLetterInWord = false;
       _score = 0;
     });
   }
@@ -422,7 +455,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
 
     final words = _getWords();
-    print('🔍 Current word index: $_currentWordIndex, Total words: ${words.length}');
+    AppLogger.debug('Current word index: $_currentWordIndex, Total words: ${words.length}');
     
     if (words.isEmpty) {
       return Scaffold(

@@ -17,10 +17,23 @@ class AuthProvider with ChangeNotifier {
   Student? _selectedStudent;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isInitialized = false;
 
   AuthProvider(this._prefs) {
-    // Storage'dan kullanıcı bilgilerini yükle (async işlem)
-    _loadUserFromStorage();
+    // Initialize authentication state from storage
+    _initializeAuthState();
+  }
+
+  Future<void> _initializeAuthState() async {
+    try {
+      await _loadUserFromStorage();
+    } catch (e) {
+      // Silently handle initialization errors
+      debugPrint('Auth initialization error: $e');
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
   }
 
   // Getters
@@ -30,34 +43,57 @@ class AuthProvider with ChangeNotifier {
   Student? get selectedStudent => _selectedStudent;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _token != null && _user != null;
+  bool get isInitialized => _isInitialized;
+  bool get isAuthenticated => _isInitialized && _token != null && _user != null;
 
   // Kullanıcı bilgilerini storage'dan yükle
   Future<void> _loadUserFromStorage() async {
     try {
       _token = await _secureStorage.read(key: 'token');
+      
+      // Clear invalid stored data if token is missing
+      if (_token == null) {
+        await _clearStoredUserData();
+        return;
+      }
+      
       final userJson = _prefs.getString('user');
-      if (userJson != null && _token != null) {
-        // JSON string'i parse et
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        _user = User.fromJson(userMap);
-        
-        // Seçili öğrenciyi yükle
-        final studentJson = _prefs.getString('selectedStudent');
-        if (studentJson != null) {
-          try {
-            final studentMap = jsonDecode(studentJson) as Map<String, dynamic>;
-            _selectedStudent = Student.fromJson(studentMap);
-          } catch (e) {
-            debugPrint('Seçili öğrenci yükleme hatası: $e');
+      if (userJson != null) {
+        try {
+          final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+          _user = User.fromJson(userMap);
+          
+          // Load selected student
+          final studentJson = _prefs.getString('selectedStudent');
+          if (studentJson != null) {
+            try {
+              final studentMap = jsonDecode(studentJson) as Map<String, dynamic>;
+              _selectedStudent = Student.fromJson(studentMap);
+            } catch (e) {
+              // Clear corrupted student data
+              await _prefs.remove('selectedStudent');
+            }
           }
+        } catch (e) {
+          // Clear corrupted user data
+          await _clearStoredUserData();
         }
-        
-        notifyListeners();
       }
     } catch (e) {
-      debugPrint('Storage yükleme hatası: $e');
+      // Clear all stored data on error
+      await _clearStoredUserData();
     }
+  }
+
+  // Clear all stored user data
+  Future<void> _clearStoredUserData() async {
+    await _secureStorage.delete(key: 'token');
+    await _prefs.remove('user');
+    await _prefs.remove('selectedStudent');
+    
+    _token = null;
+    _user = null;
+    _selectedStudent = null;
   }
 
   // Giriş yap

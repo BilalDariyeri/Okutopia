@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
 
 class LetterDrawingScreen extends StatefulWidget {
   final Activity activity;
@@ -34,10 +38,14 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
   
   final AudioPlayer _audioPlayer = AudioPlayer();
   StreamSubscription? _playerCompleteSubscription;
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
 
   late AnimationController _arrowAnimationController;
-  List<Offset> _arrowPositions = [];
-  List<double> _arrowRotations = [];
+  final List<Offset> _arrowPositions = [];
+  final List<double> _arrowRotations = [];
   
   // Gezegen animasyonları için controller'lar
   late AnimationController _planet1Controller;
@@ -105,6 +113,7 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
     });
 
     _updateArrowPositions();
+    _startActivityTracking();
     
     // Başlangıç sesini çal
     final question = widget.questions[widget.currentQuestionIndex];
@@ -125,7 +134,48 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
     _planet4Controller.dispose();
     _playerCompleteSubscription?.cancel();
     _audioPlayer.dispose();
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    if (!mounted) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
+      );
+      
+      // Oturum servisine de ekle
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
+      );
+    }
   }
 
   void _updateArrowPositions() {

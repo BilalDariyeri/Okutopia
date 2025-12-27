@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
-
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
 
 class LetterWritingBoardScreen extends StatefulWidget {
   final Activity activity;
@@ -31,11 +36,16 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
   bool _isVideoInitialized = false;
   String? _videoError;
   final GlobalKey _canvasKey = GlobalKey();
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
 
   @override
   void initState() {
     super.initState();
     _initializeVideo();
+    _startActivityTracking();
   }
 
   void _initializeVideo() {
@@ -51,7 +61,7 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
 
     if (videoFileId != null && videoFileId.isNotEmpty) {
       final videoUrl = _getFileUrl(videoFileId);
-      print('📹 Video URL: $videoUrl');
+      AppLogger.info('Video URL: $videoUrl');
       
       // Hem web hem mobil için video_player kullan (web'de de çalışır)
       _videoController = VideoPlayerController.networkUrl(
@@ -59,7 +69,7 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
       );
 
       _videoController!.initialize().then((_) {
-        print('✅ Video başarıyla yüklendi');
+        AppLogger.info('Video başarıyla yüklendi');
         if (mounted) {
           setState(() {
             _isVideoInitialized = true;
@@ -69,8 +79,8 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
           _videoController!.play();
         }
       }).catchError((error) {
-        print('❌ Video yüklenemedi: $error');
-        print('❌ Video URL: $videoUrl');
+        AppLogger.error('Video yüklenemedi', error);
+        AppLogger.error('Video URL: $videoUrl');
         if (mounted) {
           setState(() {
             _isVideoInitialized = false;
@@ -79,10 +89,10 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
         }
       });
     } else {
-      print('⚠️ Video dosya ID bulunamadı');
-      print('   question.data: ${question.data}');
-      print('   question.mediaFileId: ${question.mediaFileId}');
-      print('   question.mediaType: ${question.mediaType}');
+      AppLogger.warning('Video dosya ID bulunamadı');
+      AppLogger.debug('question.data: ${question.data}');
+      AppLogger.debug('question.mediaFileId: ${question.mediaFileId}');
+      AppLogger.debug('question.mediaType: ${question.mediaType}');
     }
   }
 
@@ -95,18 +105,59 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
   @override
   void dispose() {
     _videoController?.dispose();
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    if (!mounted) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus ?? 'Tamamlandı',
+      );
+      
+      // Oturum servisine de ekle
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus ?? 'Tamamlandı',
+      );
+    }
   }
 
   void _onPanStart(DragStartDetails details) {
     final RenderBox? box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) {
-      print('⚠️ RenderBox bulunamadı');
+      AppLogger.warning('RenderBox bulunamadı');
       return;
     }
     
     final localPosition = box.globalToLocal(details.globalPosition);
-    print('🎨 Çizim başladı: $localPosition');
+    AppLogger.debug('Çizim başladı: $localPosition');
     
     setState(() {
       _paths.add([localPosition]);

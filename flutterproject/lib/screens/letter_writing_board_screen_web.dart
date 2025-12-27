@@ -1,6 +1,6 @@
 // Web-specific implementation
 import 'dart:html' as html;
-import 'dart:ui' as ui;
+import 'dart:ui_web' as ui_web;
 
 dynamic createVideoElement(String videoUrl, String viewId, Function(dynamic)? onError, Function()? onLoaded) {
   final videoElement = html.VideoElement()
@@ -28,7 +28,7 @@ dynamic createVideoElement(String videoUrl, String viewId, Function(dynamic)? on
     });
   }
 
-  ui.platformViewRegistry.registerViewFactory(
+  ui_web.platformViewRegistry.registerViewFactory(
     viewId,
     (int viewId) => videoElement,
   );
