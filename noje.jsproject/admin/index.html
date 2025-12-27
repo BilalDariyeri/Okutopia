@@ -4821,6 +4821,21 @@
             if (!currentTeacherNotesStudentId) return;
             
             try {
+                // Önce son çalışma verisini yükle
+                let lastSessionData = null;
+                try {
+                    const lastSessionResponse = await fetch(
+                        `${API_BASE}/teacher-notes/student/${currentTeacherNotesStudentId}/last-session`,
+                        { headers: { 'Authorization': `Bearer ${currentToken}` } }
+                    );
+                    const lastSessionResult = await lastSessionResponse.json();
+                    if (lastSessionResult.success) {
+                        lastSessionData = lastSessionResult.lastSession;
+                    }
+                } catch (error) {
+                    console.error('Son çalışma verisi yüklenemedi:', error);
+                }
+                
                 // Admin panelinden çağrıldığında öğretmen ID'sini query parametresi olarak gönder
                 const url = currentTeacherNotesTeacherId 
                     ? `${API_BASE}/teacher-notes/student/${currentTeacherNotesStudentId}?teacherId=${currentTeacherNotesTeacherId}`
@@ -4832,7 +4847,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderTeacherNotes(data);
+                    renderTeacherNotes(data, lastSessionData);
                 } else {
                     showAlert('teacherNotesAlert', data.message || 'Notlar yüklenemedi', 'error');
                 }
@@ -4842,7 +4857,7 @@
             }
         }
 
-        function renderTeacherNotes(data) {
+        function renderTeacherNotes(data, lastSessionData = null) {
             const container = document.getElementById('teacherNotesContent');
             if (!container) return;
             
@@ -4850,6 +4865,81 @@
                 <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <h3 style="margin-bottom: 20px;">${data.student.firstName} ${data.student.lastName} - Öğretmen Notları</h3>
             `;
+            
+            // 💡 VERİTABANI OPTİMİZASYONU: Son Çalışma İstatistikleri Bölümü
+            if (lastSessionData && lastSessionData.activities && lastSessionData.activities.length > 0) {
+                html += `
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px;">
+                            <span>📊 Son Çalışma</span>
+                        </h4>
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-weight: 600;">Toplam Süre:</span>
+                                <span style="font-size: 18px; font-weight: bold;">${lastSessionData.totalDurationFormatted || '0sn'}</span>
+                            </div>
+                            ${lastSessionData.sessionStartTime ? `
+                                <div style="font-size: 12px; opacity: 0.9;">
+                                    Başlangıç: ${new Date(lastSessionData.sessionStartTime).toLocaleString('tr-TR')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px;">
+                            <div style="font-weight: 600; margin-bottom: 10px;">Tamamlanan Aktiviteler:</div>
+                            <div style="display: grid; gap: 8px;">
+                                ${lastSessionData.activities.map((activity, index) => `
+                                    <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                        <span>${index + 1}. ${activity.activityTitle || 'Bilinmeyen Aktivite'}</span>
+                                        <span style="font-weight: 600;">${activity.durationFormatted || '0sn'}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+                        <strong>Son Çalışma:</strong> Henüz çalışma kaydı bulunmamaktadır.
+                    </div>
+                `;
+            }
+            
+            // Not Ekleme Bölümü
+            html += `
+                <div style="background: #f0f7ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #4CAF50;">
+                    <h4 style="margin: 0 0 15px 0; color: #2c3e50;">📝 Yeni Not Ekle</h4>
+                    <form id="quickNoteForm" onsubmit="saveQuickTeacherNote(event)" style="display: grid; gap: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Not İçeriği *</label>
+                            <textarea id="quickNoteContent" required rows="4" 
+                                      placeholder="Öğrenci hakkında notunuzu buraya yazın..."
+                                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; resize: vertical; font-family: inherit;"></textarea>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Öncelik</label>
+                                <select id="quickNotePriority" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Önemli">Önemli</option>
+                                    <option value="Acil">Acil</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Kategori</label>
+                                <input type="text" id="quickNoteCategory" value="Genel" 
+                                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
+                            💾 Notu Kaydet
+                        </button>
+                    </form>
+                </div>
+            `;
+            
+            // Mevcut Notlar Bölümü
+            html += '<h4 style="margin: 20px 0 15px 0; color: #2c3e50;">📋 Mevcut Notlar</h4>';
             
             if (data.notes && data.notes.length > 0) {
                 html += '<div style="display: grid; gap: 15px;">';
@@ -4888,6 +4978,67 @@
             
             html += '</div>';
             container.innerHTML = html;
+        }
+        
+        // Hızlı not ekleme fonksiyonu
+        async function saveQuickTeacherNote(event) {
+            event.preventDefault();
+            
+            if (!currentTeacherNotesStudentId) {
+                showAlert('teacherNotesAlert', 'Lütfen önce bir öğrenci seçin', 'error');
+                return;
+            }
+            
+            const content = document.getElementById('quickNoteContent').value.trim();
+            const priority = document.getElementById('quickNotePriority').value;
+            const category = document.getElementById('quickNoteCategory').value.trim() || 'Genel';
+            
+            if (!content) {
+                showAlert('teacherNotesAlert', 'Lütfen not içeriğini giriniz', 'error');
+                return;
+            }
+            
+            // Otomatik başlık oluştur (tarih + kategori)
+            const title = `${category} - ${new Date().toLocaleDateString('tr-TR')}`;
+            
+            try {
+                const url = `${API_BASE}/teacher-notes/student/${currentTeacherNotesStudentId}`;
+                const bodyData = {
+                    title: title,
+                    content: content,
+                    priority: priority,
+                    category: category
+                };
+                
+                if (currentTeacherNotesTeacherId) {
+                    bodyData.teacherId = currentTeacherNotesTeacherId;
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(bodyData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('teacherNotesAlert', data.message || 'Not kaydedildi', 'success');
+                    // Formu temizle
+                    document.getElementById('quickNoteForm').reset();
+                    document.getElementById('quickNoteCategory').value = 'Genel';
+                    // Notları yenile
+                    await loadStudentTeacherNotes();
+                } else {
+                    showAlert('teacherNotesAlert', data.message || 'Not kaydedilemedi', 'error');
+                }
+            } catch (error) {
+                console.error('Not kaydetme hatası:', error);
+                showAlert('teacherNotesAlert', 'Hata: ' + error.message, 'error');
+            }
         }
 
         function openTeacherNoteModal(noteId = null) {

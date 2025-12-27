@@ -108,6 +108,32 @@ router.get('/student/:studentId', authenticate, requireTeacher, teacherNoteContr
 
 /**
  * @swagger
+ * /api/teacher-notes/student/{studentId}/last-session:
+ *   get:
+ *     summary: Öğrencinin Son Çalışma İstatistiklerini Getirme
+ *     tags: [TeacherNotes]
+ *     description: Öğretmen Notları ekranında gösterilmek üzere öğrencinin son çalışma oturumunu getirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: studentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Öğrenci ID'si
+ *     responses:
+ *       '200':
+ *         description: Son çalışma istatistikleri başarıyla getirildi
+ *       '401':
+ *         description: Yetkilendirme hatası
+ *       '404':
+ *         description: Öğrenci bulunamadı
+ */
+router.get('/student/:studentId/last-session', authenticate, requireTeacher, teacherNoteController.getStudentLastSession);
+
+/**
+ * @swagger
  * /api/teacher-notes/{noteId}:
  *   put:
  *     summary: Notu Güncelleme

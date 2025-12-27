@@ -50,18 +50,30 @@ class StatisticsService {
     }
   }
 
-  /// Öğrenci oturumu bitir
+  /// Öğrenci oturumu bitir (oturum verileriyle birlikte)
   /// POST /api/statistics/end-session
-  Future<Map<String, dynamic>> endSession(String studentId) async {
+  Future<Map<String, dynamic>> endSession(
+    String studentId, {
+    List<Map<String, dynamic>>? sessionActivities,
+    int? totalDurationSeconds,
+  }) async {
     try {
       final token = await _getToken();
       if (token == null) {
         throw Exception('Token bulunamadı. Lütfen tekrar giriş yapın.');
       }
 
+      final requestData = <String, dynamic>{'studentId': studentId};
+      
+      // Oturum verileri varsa ekle (lastSessionStats güncellemesi için)
+      if (sessionActivities != null && totalDurationSeconds != null) {
+        requestData['sessionActivities'] = sessionActivities;
+        requestData['totalDurationSeconds'] = totalDurationSeconds;
+      }
+
       final response = await _dio.post(
         '/statistics/end-session',
-        data: {'studentId': studentId},
+        data: requestData,
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
         ),
@@ -112,7 +124,49 @@ class StatisticsService {
     }
   }
 
-  /// Veliye email gönder
+  /// Veliye email gönder (oturum bazlı)
+  /// POST /api/statistics/student/:studentId/send-session-email
+  Future<Map<String, dynamic>> sendSessionEmailToParent(
+    String studentId, {
+    String? parentEmail,
+    required List<Map<String, dynamic>> sessionActivities,
+    required int totalDurationSeconds,
+  }) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        throw Exception('Token bulunamadı. Lütfen tekrar giriş yapın.');
+      }
+
+      final response = await _dio.post(
+        '/statistics/student/$studentId/send-session-email',
+        data: {
+          if (parentEmail != null) 'parentEmail': parentEmail,
+          'sessionActivities': sessionActivities,
+          'totalDurationSeconds': totalDurationSeconds,
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': response.data['message'],
+        };
+      } else {
+        throw Exception(response.data['message'] ?? 'Email gönderilemedi.');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        throw Exception(e.response?.data['message'] ?? 'Email gönderilemedi.');
+      }
+      throw Exception('Bağlantı hatası: ${e.message}');
+    }
+  }
+
+  /// Veliye email gönder (mevcut - bugünkü veriler)
   /// POST /api/statistics/student/:studentId/send-email
   Future<Map<String, dynamic>> sendEmailToParent(String studentId, {String? parentEmail}) async {
     try {

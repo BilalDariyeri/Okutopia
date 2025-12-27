@@ -65,7 +65,9 @@ const sendStatisticsEmail = async (options) => {
         dateLabel = 'Bugün',
         noActivityToday = false,
         senderName = 'Eğitim Sistemi', // Giriş yapan kullanıcının adı (From Name)
-        replyToEmail = null // Giriş yapan kullanıcının email'i (Reply-To)
+        replyToEmail = null, // Giriş yapan kullanıcının email'i (Reply-To)
+        customHtmlContent = null, // Özel HTML içeriği (varsa kullanılır)
+        customTextContent = null // Özel text içeriği (varsa kullanılır)
     } = options;
 
     if (!to || !studentName) {
@@ -190,7 +192,17 @@ const sendStatisticsEmail = async (options) => {
         completedLessonsHtml = '<p style="color: #666; font-style: italic;">Henüz ders tamamlanmamış</p>';
     }
 
-    const htmlContent = `
+    // Özel içerik varsa onu kullan, yoksa varsayılan içeriği oluştur
+    let htmlContent;
+    let textContent;
+    
+    if (customHtmlContent && customTextContent) {
+        // Özel içerik kullan
+        htmlContent = customHtmlContent;
+        textContent = customTextContent;
+    } else {
+        // Varsayılan içerik oluştur
+        htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -262,8 +274,8 @@ const sendStatisticsEmail = async (options) => {
         </html>
     `;
 
-    // Text içeriği oluştur
-    let textContent = `
+        // Text içeriği oluştur (varsayılan)
+        textContent = `
 Öğrenci İstatistik Raporu
 
 Sayın Veli,
@@ -279,7 +291,7 @@ Durum: Bugün aktivite tamamlanmadı
 Uygulamada Geçirilen Süre: ${formatTime(totalTimeSpent)}`}
 `;
 
-    if (!noActivityToday) {
+        if (!noActivityToday) {
         if (totalReadingTime > 0) {
             textContent += `Okuma Süresi: ${formatTime(totalReadingTime)}\n`;
         }
@@ -334,9 +346,10 @@ Uygulamada Geçirilen Süre: ${formatTime(totalTimeSpent)}`}
         } else {
             textContent += 'Henüz ders tamamlanmamış\n';
         }
+        }
+        
+        textContent += '\nİyi çalışmalar dileriz.';
     }
-    
-    textContent += '\nİyi çalışmalar dileriz.';
 
     try {
         // Email transporter oluştur (sistem email'i ile - tek bir App Password yeterli)
@@ -364,7 +377,9 @@ Uygulamada Geçirilen Süre: ${formatTime(totalTimeSpent)}`}
             from: `"${senderName}" <${systemEmail}>`, // Sistem email'i ama öğretmenin adı görünür
             replyTo: replyToEmail || systemEmail, // Yanıtlar öğretmenin email'ine gider
             to: to,
-            subject: `${studentName} - ${dateLabel} Çalışma İstatistikleri`,
+            subject: customHtmlContent 
+                ? `${studentName} - Oturum Raporu`
+                : `${studentName} - ${dateLabel} Çalışma İstatistikleri`,
             text: textContent,
             html: htmlContent
         };

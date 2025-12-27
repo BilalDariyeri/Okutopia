@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
 
 class QuestionDetailScreen extends StatefulWidget {
   final Activity activity;
@@ -30,11 +35,16 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlayingAudio = false;
   StreamSubscription? _playerCompleteSubscription;
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.currentQuestionIndex;
+    _startActivityTracking();
 
     // Ses çalma tamamlandığında dinle
     _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
@@ -44,13 +54,58 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         });
       }
     });
+
+    // Tüm soruların resimlerini önceden yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadAllQuestionImages();
+    });
   }
 
   @override
   void dispose() {
     _playerCompleteSubscription?.cancel();
     _audioPlayer.dispose();
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus,
+      );
+      
+      // Oturum servisine de ekle
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus,
+      );
+    }
   }
 
   String _getFileUrl(String? fileId) {
@@ -58,6 +113,84 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     // API base URL'den /api kısmını kaldırıp dosya URL'i oluştur
     final baseUrl = ApiConfig.baseUrl.replaceAll('/api', '');
     return '$baseUrl/api/files/$fileId';
+  }
+
+  /// Tüm soruların resimlerini önceden yükle (preload)
+  void _preloadAllQuestionImages() {
+    if (!mounted) return;
+    
+    // Tüm soruların resimlerini sırayla preload et
+    for (int i = 0; i < widget.questions.length; i++) {
+      final question = widget.questions[i];
+      final imageFileId = question.mediaFileId;
+      
+      if (imageFileId != null && imageFileId.isNotEmpty) {
+        final imageUrl = _getFileUrl(imageFileId);
+        
+        // URL geçerliliğini kontrol et
+        if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
+          continue;
+        }
+        
+        // Resmi önceden cache'e yükle (hata durumunda sessizce devam et)
+        Future.delayed(Duration(milliseconds: i * 100), () async {
+          if (!mounted) return;
+          
+          try {
+            await precacheImage(
+              CachedNetworkImageProvider(imageUrl),
+              context,
+            ).timeout(
+              const Duration(seconds: 5),
+              onTimeout: () {
+                debugPrint('Preload timeout (soru ${i + 1})');
+              },
+            );
+          } catch (e) {
+            // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
+            // Bu normal bir durum olabilir, bu yüzden sadece debug modda loglayalım
+            if (kDebugMode) {
+              debugPrint('Preload hatası (soru ${i + 1}): $e');
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /// Bir sonraki sorunun resmini önceden yükle (preload)
+  void _preloadNextQuestionImage() {
+    if (!mounted) return;
+    
+    if (_currentIndex + 1 < widget.questions.length) {
+      final nextQuestion = widget.questions[_currentIndex + 1];
+      final nextImageFileId = nextQuestion.mediaFileId;
+      
+      if (nextImageFileId != null && nextImageFileId.isNotEmpty) {
+        final imageUrl = _getFileUrl(nextImageFileId);
+        
+        // URL geçerliliğini kontrol et
+        if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
+          return;
+        }
+        
+        // Resmi önceden cache'e yükle (hata durumunda sessizce devam et)
+        precacheImage(
+          CachedNetworkImageProvider(imageUrl),
+          context,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('Preload timeout (sonraki soru)');
+          },
+        ).catchError((error) {
+          // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
+          if (kDebugMode) {
+            debugPrint('Preload hatası: $error');
+          }
+        });
+      }
+    }
   }
 
   Future<void> _playAudio(String? fileId) async {
@@ -151,7 +284,30 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
           _hasAnswered = false;
           _userAnswer = null;
         });
+        
+        // Bir sonraki sorunun resmini preload et
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _preloadNextQuestionImage();
+        });
       } else if (mounted) {
+        // Tüm sorular bitti - aktiviteyi oturum servisine ekle
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final selectedStudent = authProvider.selectedStudent;
+        
+        if (selectedStudent != null && _activityStartTime != null) {
+          final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+          final successRate = (_score / widget.questions.length * 100).round();
+          final successStatus = '${_score}/${widget.questions.length} soru doğru (%$successRate)';
+          
+          _sessionService.addActivity(
+            studentId: selectedStudent.id,
+            activityId: widget.activity.id,
+            activityTitle: widget.activity.title,
+            durationSeconds: duration,
+            successStatus: successStatus,
+          );
+        }
+        
         // Tüm sorular bitti
         _showCompletionDialog();
       }

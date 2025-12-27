@@ -46,6 +46,43 @@ const UserSchema = new Schema({
             message: 'Geçerli bir e-posta adresi giriniz.'
         }
     },
+    // 💡 VERİTABANI OPTİMİZASYONU: Son oturum istatistikleri (overwrite mantığı)
+    lastSessionStats: {
+        totalDurationSeconds: {
+            type: Number,
+            default: 0
+        },
+        activities: [{
+            activityId: {
+                type: Schema.Types.ObjectId,
+                ref: 'Activity'
+            },
+            activityTitle: {
+                type: String,
+                default: ''
+            },
+            durationSeconds: {
+                type: Number,
+                default: 0
+            },
+            completedAt: {
+                type: Date,
+                default: Date.now
+            },
+            successStatus: {
+                type: String,
+                default: null
+            }
+        }],
+        sessionStartTime: {
+            type: Date,
+            default: null
+        },
+        lastUpdated: {
+            type: Date,
+            default: Date.now
+        }
+    },
     
     // 💡 KRİTİK DÜZELTME: Öğretmen, Admin ve SuperAdmin'e özel alanlar
     email: {

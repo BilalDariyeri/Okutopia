@@ -94,7 +94,7 @@ exports.startSession = async (req, res) => {
 // POST /api/statistics/end-session
 // ---------------------------------------------------------------------
 exports.endSession = async (req, res) => {
-    const { studentId } = req.body;
+    const { studentId, sessionActivities, totalDurationSeconds } = req.body;
 
     try {
         // Öğrenciyi kontrol et
@@ -211,6 +211,46 @@ exports.endSession = async (req, res) => {
         }
 
         await dailyStats.save();
+
+        // 💡 VERİTABANI OPTİMİZASYONU: Son oturum istatistiklerini User modeline kaydet (OVERWRITE)
+        // Eğer request body'de sessionActivities ve totalDurationSeconds varsa, bunları kullan
+        // Yoksa Progress'ten gelen verileri kullan
+        let lastSessionActivities = [];
+        let sessionTotalDuration = activeSession.duration;
+        let sessionStartTime = activeSession.startTime;
+
+        if (sessionActivities && Array.isArray(sessionActivities) && sessionActivities.length > 0 && totalDurationSeconds !== undefined) {
+            // Frontend'den gelen oturum verilerini kullan (daha doğru)
+            lastSessionActivities = sessionActivities.map(activity => ({
+                activityId: activity.activityId,
+                activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
+                durationSeconds: activity.durationSeconds || 0,
+                completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
+                successStatus: activity.successStatus || null
+            }));
+            sessionTotalDuration = totalDurationSeconds;
+            // İlk aktivitenin tamamlanma zamanını sessionStartTime olarak kullan
+            if (lastSessionActivities.length > 0 && lastSessionActivities[0].completedAt) {
+                sessionStartTime = lastSessionActivities[0].completedAt;
+            }
+        } else {
+            // Progress'ten gelen verileri kullan (fallback)
+            lastSessionActivities = todayActivities.map(record => ({
+                activityId: record.activityId?._id || record.activityId,
+                activityTitle: record.activityId?.title || '',
+                durationSeconds: 0, // Progress'ten süre bilgisi yok
+                completedAt: record.completionDate,
+                successStatus: null
+            }));
+        }
+
+        // User modelindeki lastSessionStats'ı güncelle (OVERWRITE - append değil)
+        await User.findByIdAndUpdate(studentId, {
+            'lastSessionStats.totalDurationSeconds': sessionTotalDuration,
+            'lastSessionStats.activities': lastSessionActivities,
+            'lastSessionStats.sessionStartTime': sessionStartTime,
+            'lastSessionStats.lastUpdated': new Date()
+        }, { new: true });
 
         logger.info('Oturum bitirildi ve istatistikler güncellendi', {
             studentId: studentId,
@@ -692,7 +732,280 @@ exports.sendStatisticsEmail = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------
-// 6. Okuma Süresi Başlatma (Öğretmen Tarafından)
+// 6. Oturum Bazlı İstatistikleri Veliye Email Olarak Gönderme
+// POST /api/statistics/student/:studentId/send-session-email
+// ---------------------------------------------------------------------
+exports.sendSessionStatisticsEmail = async (req, res) => {
+    const { studentId } = req.params;
+    const { parentEmail, sessionActivities, totalDurationSeconds } = req.body;
+
+    try {
+        // Giriş yapan kullanıcının bilgilerini al
+        const senderUser = req.user;
+        if (!senderUser || !senderUser.email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Giriş yapılan kullanıcının email adresi bulunamadı.'
+            });
+        }
+        
+        const senderName = `${senderUser.firstName} ${senderUser.lastName}`;
+        const replyToEmail = senderUser.email;
+        
+        logger.info('Oturum bazlı email gönderim isteği', {
+            senderId: senderUser._id,
+            senderName: senderName,
+            senderEmail: replyToEmail,
+            studentId: studentId,
+            activityCount: sessionActivities?.length || 0
+        });
+
+        // Öğrenciyi kontrol et
+        const student = await User.findById(studentId).select('firstName lastName role parentEmail').lean();
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: 'Öğrenci bulunamadı.'
+            });
+        }
+
+        if (student.role !== 'Student') {
+            return res.status(400).json({
+                success: false,
+                message: 'Bu kullanıcı bir öğrenci değil.'
+            });
+        }
+
+        // Email adresini belirle
+        const emailToSend = parentEmail || student.parentEmail;
+
+        if (!emailToSend) {
+            return res.status(400).json({
+                success: false,
+                message: 'Veli e-posta adresi bulunamadı. Lütfen önce veli e-posta adresini giriniz.'
+            });
+        }
+
+        // Email formatını kontrol et
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailToSend)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Geçerli bir e-posta adresi giriniz.'
+            });
+        }
+
+        // Oturum aktiviteleri kontrolü
+        const activities = sessionActivities || [];
+        const totalDuration = totalDurationSeconds || 0;
+
+        if (activities.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bu oturumda henüz aktivite tamamlanmamış.'
+            });
+        }
+
+        // Süreyi formatla
+        const formatTime = (seconds) => {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours} saat ${minutes} dakika ${secs} saniye`;
+            } else if (minutes > 0) {
+                return `${minutes} dakika ${secs} saniye`;
+            } else {
+                return `${secs} saniye`;
+            }
+        };
+
+        // Aktivite listesini formatla
+        const activitiesListHtml = activities.map((activity, index) => {
+            const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
+            const duration = activity.durationSeconds || 0;
+            const successStatus = activity.successStatus || '';
+            
+            return `
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 10px;">${index + 1}</td>
+                    <td style="border: 1px solid #ddd; padding: 10px;"><strong>${activityTitle}</strong></td>
+                    <td style="border: 1px solid #ddd; padding: 10px;">${formatTime(duration)}</td>
+                    ${successStatus ? `<td style="border: 1px solid #ddd; padding: 10px;">${successStatus}</td>` : '<td style="border: 1px solid #ddd; padding: 10px;">-</td>'}
+                </tr>
+            `;
+        }).join('');
+
+        const activitiesListText = activities.map((activity, index) => {
+            const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
+            const duration = activity.durationSeconds || 0;
+            const successStatus = activity.successStatus || '';
+            
+            return `${index + 1}. ${activityTitle}: ${formatTime(duration)}${successStatus ? ` (${successStatus})` : ''}`;
+        }).join('\n');
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+                    .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+                    .stat-box { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #4CAF50; }
+                    .stat-label { font-weight: bold; color: #666; }
+                    .stat-value { font-size: 24px; color: #4CAF50; margin-top: 5px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th { background-color: #4CAF50; color: white; padding: 10px; text-align: left; }
+                    td { border: 1px solid #ddd; padding: 10px; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>📊 Oturum Raporu</h1>
+                    </div>
+                    <div class="content">
+                        <p>Sayın Veli,</p>
+                        <p><strong>${student.firstName} ${student.lastName}</strong> isimli öğrencinin son çalışma oturumu detayları aşağıda yer almaktadır:</p>
+                        
+                        <div class="stat-box">
+                            <div class="stat-label">Toplam Süre</div>
+                            <div class="stat-value">${formatTime(totalDuration)}</div>
+                        </div>
+                        
+                        <h3 style="color: #4CAF50; margin-top: 20px;">Tamamlanan Aktiviteler</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Aktivite</th>
+                                    <th>Süre</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${activitiesListHtml}
+                            </tbody>
+                        </table>
+                        
+                        <p style="margin-top: 20px;">İyi çalışmalar dileriz.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Bu e-posta otomatik olarak gönderilmiştir.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const textContent = `
+Oturum Raporu
+
+Sayın Veli,
+
+${student.firstName} ${student.lastName} isimli öğrencinin son çalışma oturumu detayları:
+
+Toplam Süre: ${formatTime(totalDuration)}
+
+Tamamlanan Aktiviteler:
+${activitiesListText}
+
+İyi çalışmalar dileriz.
+        `;
+
+        // Email gönder
+        const { sendStatisticsEmail } = require('../utils/emailService');
+        await sendStatisticsEmail({
+            to: emailToSend,
+            studentName: `${student.firstName} ${student.lastName}`,
+            totalTimeSpent: totalDuration,
+            totalReadingTime: 0,
+            totalWordsRead: 0,
+            averageReadingSpeed: 0,
+            completedActivities: activities.length,
+            activities: activities.map((act, idx) => ({
+                activityId: { title: act.activityTitle },
+                title: act.activityTitle,
+                score: 0,
+                finalScore: 0,
+            })),
+            completedLessons: {},
+            dateLabel: 'Bu Oturum',
+            noActivityToday: false,
+            senderName: senderName,
+            replyToEmail: replyToEmail,
+            customHtmlContent: htmlContent,
+            customTextContent: textContent,
+        });
+
+        // 💡 VERİTABANI OPTİMİZASYONU: Son oturum istatistiklerini User modeline kaydet (OVERWRITE)
+        // Frontend'den gelen oturum verilerini kullanarak lastSessionStats'ı güncelle
+        const lastSessionActivities = activities.map(activity => ({
+            activityId: activity.activityId,
+            activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
+            durationSeconds: activity.durationSeconds || 0,
+            completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
+            successStatus: activity.successStatus || null
+        }));
+
+        // User modelindeki lastSessionStats'ı güncelle (OVERWRITE - append değil)
+        await User.findByIdAndUpdate(studentId, {
+            'lastSessionStats.totalDurationSeconds': totalDuration,
+            'lastSessionStats.activities': lastSessionActivities,
+            'lastSessionStats.sessionStartTime': lastSessionActivities.length > 0 
+                ? new Date(lastSessionActivities[0].completedAt) 
+                : new Date(),
+            'lastSessionStats.lastUpdated': new Date()
+        }, { new: true });
+
+        logger.info('Oturum bazlı istatistik email gönderildi ve lastSessionStats güncellendi', {
+            studentId: studentId,
+            parentEmail: emailToSend,
+            activityCount: activities.length,
+            totalDuration: totalDuration
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Oturum raporu başarıyla veliye gönderildi.',
+            email: emailToSend
+        });
+    } catch (error) {
+        logger.error('Oturum bazlı email gönderme hatası', {
+            studentId: studentId,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        let errorMessage = 'Email gönderilemedi.';
+        let statusCode = 500;
+        
+        if (error.message && error.message.includes('Email yapılandırması eksik')) {
+            errorMessage = 'Email yapılandırması eksik: EMAIL_USER ve EMAIL_PASS .env dosyasında tanımlanmalıdır.';
+            statusCode = 500;
+        } else if (error.message && error.message.includes('kimlik doğrulama')) {
+            errorMessage = 'Email kimlik doğrulama hatası. Gmail için App Password kullanılmalıdır.';
+            statusCode = 500;
+        } else {
+            errorMessage = error.message || 'Email gönderilemedi.';
+            statusCode = 500;
+        }
+        
+        res.status(statusCode).json({
+            success: false,
+            message: errorMessage,
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Email gönderme hatası'
+        });
+    }
+};
+
+// ---------------------------------------------------------------------
+// 7. Okuma Süresi Başlatma (Öğretmen Tarafından)
 // POST /api/statistics/start-reading
 // ---------------------------------------------------------------------
 exports.startReading = async (req, res) => {
