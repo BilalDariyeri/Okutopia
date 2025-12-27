@@ -3,6 +3,7 @@ class MiniQuestion {
   final String? activityId; // Artık optional - etkinlik veya ders bağlantısı
   final String? lessonId; // Yeni: ders bağlantısı
   final String questionType; // Image, Audio, Video, Drawing, Text
+  final String? questionFormat; // Yeni: soru formatı (ONLY_TEXT, KELIMEDE_HARF_BULMA, vb.)
   final String? mediaFileId;
   final String? mediaUrl;
   final Map<String, dynamic>? data;
@@ -15,6 +16,7 @@ class MiniQuestion {
     this.activityId,
     this.lessonId,
     required this.questionType,
+    this.questionFormat,
     this.correctAnswer,
     this.mediaFileId,
     this.mediaUrl,
@@ -37,6 +39,7 @@ class MiniQuestion {
               : json['lesson']?['_id'] ?? json['lesson']?['id'] ?? '')
           : null,
       questionType: json['questionType'] ?? 'Text',
+      questionFormat: json['questionFormat'],
       correctAnswer: json['correctAnswer'],
       mediaFileId: json['mediaFileId'],
       mediaUrl: json['mediaUrl'],
@@ -52,6 +55,7 @@ class MiniQuestion {
       'activity': activityId,
       'lesson': lessonId,
       'questionType': questionType,
+      'questionFormat': questionFormat,
       'correctAnswer': correctAnswer,
       'mediaFileId': mediaFileId,
       'mediaUrl': mediaUrl,

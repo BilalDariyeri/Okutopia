@@ -60,6 +60,9 @@ dependencies:
   
   # Audio Player
   audioplayers: ^6.5.1            # Ses dosyalarını çalmak için
+  
+  # Video Player
+  video_player: ^2.8.2            # Video dosyalarını çalmak için
 
 dev_dependencies:
   flutter_test:
