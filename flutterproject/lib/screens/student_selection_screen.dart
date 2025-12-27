@@ -697,9 +697,8 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
           onPressed: () async {
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.logout();
-            if (context.mounted) {
-              Navigator.of(context).pushReplacementNamed('/login');
-            }
+            if (!mounted) return;
+            Navigator.of(context).pushReplacementNamed('/login');
           },
         ),
       ],
@@ -882,9 +881,8 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         await Future.delayed(const Duration(milliseconds: 400));
         
         // Kategoriler ekranına git
-        if (context.mounted) {
-          Navigator.of(context).pushReplacementNamed('/categories');
-        }
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed('/categories');
       },
       child: Container(
         padding: const EdgeInsets.all(10),
@@ -945,10 +943,10 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
                   onSelected: (value) {
                     switch (value) {
                       case 'edit':
-                        // TODO: İsim düzenle
+                        // İsim düzenleme özelliği gelecekte eklenecek
                         break;
                       case 'remove':
-                        // TODO: Sınıftan çıkar
+                        // Sınıftan çıkarma özelliği gelecekte eklenecek
                         break;
                     }
                   },

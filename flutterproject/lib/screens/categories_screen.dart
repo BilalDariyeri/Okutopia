@@ -1029,7 +1029,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // TODO: İstatistikler ekranına git
+                // İstatistikler ekranı gelecekte eklenecek
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1056,7 +1056,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // TODO: Profil ekranına git
+                // Profil ekranı gelecekte eklenecek
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
