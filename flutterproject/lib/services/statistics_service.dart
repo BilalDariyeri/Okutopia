@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/app_logger.dart';
+import 'token_service.dart';
 
 class StatisticsService {
   final Dio _dio;
@@ -15,7 +16,7 @@ class StatisticsService {
         _storage = const FlutterSecureStorage();
 
   Future<String?> _getToken() async {
-    return await _storage.read(key: 'token');
+    return await TokenService.getToken();
   }
 
   /// Öğrenci oturumu başlat

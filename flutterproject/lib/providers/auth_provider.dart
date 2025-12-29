@@ -88,7 +88,7 @@ class AuthProvider with ChangeNotifier {
 
   // Clear all stored user data
   Future<void> _clearStoredUserData() async {
-    await _secureStorage.delete(key: 'token');
+    await TokenService.clearAll();
     await _prefs.remove('user');
     await _prefs.remove('selectedStudent');
     
@@ -164,8 +164,8 @@ class AuthProvider with ChangeNotifier {
         _user = response.teacher;
         _classroom = response.classroom;
 
-        // Token'ı güvenli storage'a kaydet
-        await _secureStorage.write(key: 'token', value: _token);
+        // Token'ı hem cache'e hem güvenli storage'a kaydet
+        await TokenService.cacheToken(_token!);
         
         // Kullanıcı bilgilerini shared preferences'a kaydet
         await _prefs.setString('user', jsonEncode(response.teacher.toJson()));
@@ -210,7 +210,7 @@ class AuthProvider with ChangeNotifier {
     _selectedStudent = null;
     _errorMessage = null;
 
-    await _secureStorage.delete(key: 'token');
+    await TokenService.clearAll();
     await _prefs.remove('user');
     await _prefs.remove('selectedStudent');
 

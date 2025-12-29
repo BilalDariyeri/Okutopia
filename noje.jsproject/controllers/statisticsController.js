@@ -795,14 +795,18 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             });
         }
 
-        // Oturum aktiviteleri kontrolü
-        const activities = sessionActivities || [];
+        // Oturum aktiviteleri kontrolü - SADECE tamamlanmış aktiviteleri filtrele
+        const allActivities = sessionActivities || [];
+        const completedActivities = allActivities.filter(activity => {
+            // isCompleted === true olan aktiviteleri al (varsayılan olarak true kabul et)
+            return activity.isCompleted !== false; // undefined veya true ise dahil et
+        });
         const totalDuration = totalDurationSeconds || 0;
 
-        if (activities.length === 0) {
+        if (completedActivities.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Bu oturumda henüz aktivite tamamlanmamış.'
+                message: 'Bu oturumda henüz tamamlanmış aktivite bulunamadı.'
             });
         }
 
@@ -821,8 +825,8 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             }
         };
 
-        // Aktivite listesini formatla
-        const activitiesListHtml = activities.map((activity, index) => {
+        // Aktivite listesini formatla (SADECE tamamlanmış aktiviteler)
+        const activitiesListHtml = completedActivities.map((activity, index) => {
             const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
             const duration = activity.durationSeconds || 0;
             const successStatus = activity.successStatus || '';
@@ -837,7 +841,7 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             `;
         }).join('');
 
-        const activitiesListText = activities.map((activity, index) => {
+        const activitiesListText = completedActivities.map((activity, index) => {
             const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
             const duration = activity.durationSeconds || 0;
             const successStatus = activity.successStatus || '';
@@ -927,8 +931,8 @@ ${activitiesListText}
             totalReadingTime: 0,
             totalWordsRead: 0,
             averageReadingSpeed: 0,
-            completedActivities: activities.length,
-            activities: activities.map((act, idx) => ({
+            completedActivities: completedActivities.length,
+            activities: completedActivities.map((act, idx) => ({
                 activityId: { title: act.activityTitle },
                 title: act.activityTitle,
                 score: 0,
@@ -945,12 +949,15 @@ ${activitiesListText}
 
         // 💡 VERİTABANI OPTİMİZASYONU: Son oturum istatistiklerini User modeline kaydet (OVERWRITE)
         // Frontend'den gelen oturum verilerini kullanarak lastSessionStats'ı güncelle
-        const lastSessionActivities = activities.map(activity => ({
+        // SADECE tamamlanmış aktiviteleri kaydet
+        const lastSessionActivities = completedActivities.map(activity => ({
             activityId: activity.activityId,
             activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
             durationSeconds: activity.durationSeconds || 0,
             completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
-            successStatus: activity.successStatus || null
+            successStatus: activity.successStatus || null,
+            isCompleted: activity.isCompleted !== false, // Tamamlanma durumu
+            correctAnswerCount: activity.correctAnswerCount || 0 // Doğru cevap sayısı
         }));
 
         // User modelindeki lastSessionStats'ı güncelle (OVERWRITE - append değil)

@@ -57,6 +57,7 @@ app.use(cors(corsOptions));
 
 // 💡 GÜVENLİK: Rate limiting (DDoS koruması) - Health check ve admin login hariç tüm endpoint'ler için
 app.use('/api/', (req, res, next) => {
+    // 💡 DEV: Rate limiting tamamen devre dışı
     // Health check endpoint'lerini rate limit'ten muaf tut
     if (req.path.startsWith('/health')) {
         return next();
@@ -65,7 +66,9 @@ app.use('/api/', (req, res, next) => {
     if (req.path === '/admin/login') {
         return next();
     }
-    return generalLimiter(req, res, next);
+    // Rate limiter devre dışı - direkt devam et
+    return next();
+    // return generalLimiter(req, res, next); // Devre dışı
 });
 
 // 💡 FAVICON: Favicon isteğini en başta handle et (tarayıcılar otomatik olarak ister)

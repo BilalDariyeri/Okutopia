@@ -43,7 +43,8 @@ const { loginLimiter } = require('../middleware/rateLimiter');
  *       '403':
  *         description: Admin yetkisi gerekli
  */
-router.post('/login', loginLimiter, adminController.adminLogin);
+// 💡 DEV: Rate limiting devre dışı
+router.post('/login', /* loginLimiter, */ adminController.adminLogin);
 
 /**
  * @swagger

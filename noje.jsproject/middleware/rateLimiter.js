@@ -4,9 +4,10 @@ const rateLimit = require('express-rate-limit');
 const logger = require('../config/logger');
 
 // Genel API rate limiter (tüm endpoint'ler için)
+// 💡 DEV: Rate limiting devre dışı - limitler çok yüksek
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 100, // Her IP için 15 dakikada maksimum 100 istek
+    max: 100000, // Her IP için 15 dakikada maksimum 100000 istek (devre dışı)
     message: {
         success: false,
         message: 'Çok fazla istek gönderildi. Lütfen 15 dakika sonra tekrar deneyin.'
@@ -27,9 +28,10 @@ const generalLimiter = rateLimit({
 });
 
 // Login endpoint için özel rate limiter (admin login için daha esnek)
+// 💡 DEV: Rate limiting devre dışı - limitler çok yüksek
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 30, // Her IP için 15 dakikada maksimum 30 login denemesi (artırıldı)
+    max: 10000, // Her IP için 15 dakikada maksimum 10000 login denemesi (devre dışı)
     message: {
         success: false,
         message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.'
@@ -51,9 +53,10 @@ const loginLimiter = rateLimit({
 });
 
 // Register endpoint için özel rate limiter
+// 💡 DEV: Rate limiting devre dışı - limitler çok yüksek
 const registerLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 saat
-    max: 3, // Her IP için 1 saatte maksimum 3 kayıt
+    max: 1000, // Her IP için 1 saatte maksimum 1000 kayıt (devre dışı)
     message: {
         success: false,
         message: 'Çok fazla kayıt denemesi. Lütfen 1 saat sonra tekrar deneyin.'
@@ -72,9 +75,10 @@ const registerLimiter = rateLimit({
 });
 
 // API endpoint'leri için rate limiter (daha yüksek limit)
+// 💡 DEV: Rate limiting devre dışı - limitler çok yüksek
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 200, // Authenticated kullanıcılar için daha yüksek limit
+    max: 100000, // Authenticated kullanıcılar için çok yüksek limit (devre dışı)
     message: {
         success: false,
         message: 'API rate limit aşıldı. Lütfen daha sonra tekrar deneyin.'
