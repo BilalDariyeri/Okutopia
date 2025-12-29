@@ -120,6 +120,23 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Input validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'E-posta ve şifre gereklidir.'
+      });
+    }
+
+    // JWT_SECRET kontrolü
+    if (!process.env.JWT_SECRET) {
+      logger.error('❌ KRİTİK: JWT_SECRET environment variable tanımlı değil!');
+      return res.status(500).json({
+        success: false,
+        message: 'Sunucu yapılandırma hatası. Lütfen daha sonra tekrar deneyin.'
+      });
+    }
+
     logger.info('🔍 Login denemesi:', { email: email?.trim()?.toLowerCase() });
     
     // Kullanıcıyı bul (şifre dahil)
@@ -149,8 +166,28 @@ exports.login = async (req, res) => {
     }
 
     // Şifre kontrolü
+    if (!user.password) {
+      logger.error('❌ Kullanıcının şifresi yok:', user.email);
+      return res.status(401).json({
+        success: false,
+        message: 'Geçersiz e-posta veya şifre.'
+      });
+    }
+
     // 🔒 SECURITY: Password bilgisi loglanmamalı
-    const isPasswordMatch = await user.comparePassword(password);
+    let isPasswordMatch;
+    try {
+      isPasswordMatch = await user.comparePassword(password);
+    } catch (compareError) {
+      logger.error('❌ Şifre karşılaştırma hatası:', {
+        message: compareError.message,
+        stack: compareError.stack
+      });
+      return res.status(500).json({
+        success: false,
+        message: 'Şifre kontrolü sırasında hata oluştu.'
+      });
+    }
     
     if (!isPasswordMatch) {
       logger.error('❌ Şifre eşleşmedi');
@@ -163,14 +200,35 @@ exports.login = async (req, res) => {
     logger.info('✅ Şifre doğru, token oluşturuluyor...');
 
     // Token oluştur (ObjectId'yi string'e çevir)
-    const token = generateToken(user._id.toString());
-    logger.info('✅ Token oluşturuldu');
+    let token;
+    try {
+      token = generateToken(user._id.toString());
+      logger.info('✅ Token oluşturuldu');
+    } catch (tokenError) {
+      logger.error('❌ Token oluşturma hatası:', {
+        message: tokenError.message,
+        stack: tokenError.stack
+      });
+      return res.status(500).json({
+        success: false,
+        message: 'Token oluşturma hatası. Lütfen daha sonra tekrar deneyin.'
+      });
+    }
 
     // Öğretmenin sınıfını bul ve populate et (lean() ile optimize)
-    const teacherClassroom = await Classroom.findOne({ teacher: user._id })
-      .populate('teacher', 'firstName lastName email')
-      .populate('students', 'firstName lastName')
-      .lean(); // 💡 PERFORMANS: lean() kullanarak daha hızlı
+    let teacherClassroom = null;
+    try {
+      teacherClassroom = await Classroom.findOne({ teacher: user._id })
+        .populate('teacher', 'firstName lastName email')
+        .populate('students', 'firstName lastName')
+        .lean();
+    } catch (classroomError) {
+      logger.warn('⚠️ Sınıf bulunamadı veya hata oluştu:', {
+        message: classroomError.message,
+        userId: user._id.toString()
+      });
+      // Sınıf bulunamazsa devam et, null döndür
+    }
 
     // Şifreyi response'dan çıkar
     const userResponse = {
@@ -190,6 +248,11 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
+    logger.error('❌ Login hatası:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     res.status(500).json({
       success: false,
       message: 'Giriş sırasında hata oluştu',
