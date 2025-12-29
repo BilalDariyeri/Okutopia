@@ -22,6 +22,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   final CurrentSessionService _sessionService = CurrentSessionService();
   final ScrollController _scrollController = ScrollController();
   String? _errorMessage;
+  String? _studentId; // dispose() için saklanıyor (context'e ihtiyaç duymadan kullanmak için)
   
 
   // Renk paleti (görseldeki renklere göre)
@@ -96,6 +97,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     final selectedStudent = authProvider.selectedStudent;
     
     if (selectedStudent == null) return;
+    
+    // dispose() için studentId'yi sakla
+    _studentId = selectedStudent.id;
 
     try {
       // Oturum başlat
@@ -133,14 +137,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   }
 
   Future<void> _endSessionOnDispose() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    // dispose() içinde context kullanılamaz, bu yüzden saklanan _studentId'yi kullan
+    final studentId = _studentId;
     
-    if (selectedStudent == null) return;
+    if (studentId == null) return;
 
     try {
       // Sadece oturumu bitir, email gönderme işlemi öğretmen tarafından yapılacak
-      await _statisticsService.endSession(selectedStudent.id);
+      await _statisticsService.endSession(studentId);
     } catch (e) {
       debugPrint('Oturum bitirme hatası: $e');
     }
