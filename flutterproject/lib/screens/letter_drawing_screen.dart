@@ -607,6 +607,10 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
                                             ? CachedNetworkImage(
                                                 imageUrl: _getFileUrl(imageFileId),
                                                 fit: BoxFit.contain,
+                                                memCacheWidth: 800,
+                                                memCacheHeight: 800,
+                                                maxWidthDiskCache: 800,
+                                                maxHeightDiskCache: 800,
                                                 placeholder: (context, url) =>
                                                     const SizedBox(),
                                                 errorWidget: (context, url, error) =>

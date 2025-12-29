@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import '../providers/user_profile_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../providers/statistics_provider.dart';
 import '../services/statistics_service.dart';
-import '../services/current_session_service.dart'; // SessionActivity için
-import '../models/student_model.dart'; // Student model için
-import '../utils/debounce_throttle.dart'; // 🔒 PERFORMANCE: Rate limiting
+import '../services/current_session_service.dart';
+import '../models/student_model.dart';
+import '../utils/debounce_throttle.dart';
 import 'dart:async';
 
 class StatisticsScreen extends StatefulWidget {
@@ -20,7 +20,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   final StatisticsService _statisticsService = StatisticsService();
   final TextEditingController _emailController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  // 🔒 PERFORMANCE: Rate limiting - Debounce ile çoklu tıklamayı önle
   final _debouncer = Debouncer(delay: const Duration(milliseconds: 500));
   
   bool _isSendingEmail = false;
@@ -39,7 +38,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   void dispose() {
     _emailController.dispose();
     _scrollController.dispose();
-    _debouncer.dispose(); // 🔒 PERFORMANCE: Debouncer'ı temizle
+    _debouncer.dispose();
     super.dispose();
   }
 
@@ -49,7 +48,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     
     final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) {
       setState(() {
@@ -97,7 +96,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Future<void> _sendEmailReport() async {
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -241,11 +240,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔒 PERFORMANCE: Over-rebuild önleme - listen: false kullanarak gereksiz rebuild'leri önle
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
-    // 🔒 PERFORMANCE: Consumer kullanarak sadece statistics değiştiğinde rebuild et
     return Consumer<StatisticsProvider>(
       builder: (context, statisticsProvider, child) {
         // Cache-First: Provider'dan verileri al (anında gösterilir)
@@ -672,7 +669,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: _isSendingEmail ? null : () {
-                                // 🔒 PERFORMANCE: Rate limiting - Debounce ile çoklu tıklamayı önle
                                 _debouncer.call(() {
                                   _sendEmailReport();
                                 });

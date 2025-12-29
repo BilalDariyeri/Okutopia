@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
-import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Logout'ta student selection temizlemek için
+import '../providers/user_profile_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../models/user_model.dart';
 import '../services/user_service.dart';
 import '../services/classroom_service.dart';
@@ -713,7 +713,6 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
               onPressed: () async {
                 Navigator.of(context).pop();
                 final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                // 🔒 ARCHITECTURE: Logout'ta hem AuthProvider hem StudentSelectionProvider temizlenmeli
                 await authProvider.logout();
                 final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
                 await studentSelectionProvider.clearAll();

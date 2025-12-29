@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
+import '../providers/user_profile_provider.dart';
 import '../providers/student_selection_provider.dart';
 import '../services/teacher_note_service.dart';
 import '../models/teacher_note_model.dart';

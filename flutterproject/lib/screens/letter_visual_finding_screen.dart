@@ -10,7 +10,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import '../providers/student_selection_provider.dart';
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
 class GroupedQuestion {
@@ -111,33 +111,12 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
 
   void _groupQuestions() {
     final grouped = <GroupedQuestion>[];
-    
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('📦 SORULARI GRUPLAMA BAŞLIYOR...');
-    debugPrint('   Toplam soru sayısı: ${widget.questions.length}');
-    debugPrint('═══════════════════════════════════════');
-    
-    // Her soru bir sayfa olacak şekilde grupla
-    // Her soruda 3 resim olmalı (admin panelinden eklenen format)
-    // MAKSİMUM 5 SAYFA (15 soru/resim)
     const maxPages = 5;
     
     for (int i = 0; i < widget.questions.length && grouped.length < maxPages; i++) {
       final question = widget.questions[i];
       final imageIds = _getImageFileIds(question);
       
-      debugPrint('📄 Soru ${i + 1}:');
-      debugPrint('   Resim sayısı: ${imageIds.length}');
-      debugPrint('   Resim ID\'leri: $imageIds');
-      
-      // Doğru/yanlış haritasını al ve göster
-      final correctMap = _getImageCorrectMap(question);
-      debugPrint('   Doğru/yanlış haritası: $correctMap');
-      for (var entry in correctMap.entries) {
-        debugPrint('      ${entry.key}: ${entry.value ? "✅ DOĞRU" : "❌ YANLIŞ"}');
-      }
-      
-      // Eğer bir soruda 3 resim varsa, direkt kullan (ideal durum)
       if (imageIds.length >= 3) {
         final pageImages = imageIds.take(3).toList();
         final correctIndex = _getCorrectAnswerIndexForPage(question, pageImages);
@@ -146,42 +125,21 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
           correctIndex: correctIndex,
           instruction: question.data?['instruction']?.toString(),
         ));
-        debugPrint('   ✅ Sayfa ${grouped.length} oluşturuldu');
-        debugPrint('      Resimler: $pageImages');
-        debugPrint('      Doğru cevap index: $correctIndex');
-        debugPrint('      Doğru resim ID: ${pageImages[correctIndex]}');
-      } else if (imageIds.isNotEmpty) {
-        // Eğer tek veya iki resim varsa, uyarı ver
-        debugPrint('   ⚠️ UYARI: Soru ${i + 1} için sadece ${imageIds.length} resim bulundu! 3 resim gerekli.');
-      } else {
-        debugPrint('   ❌ HATA: Soru ${i + 1} için hiç resim bulunamadı!');
       }
     }
     
-    if (grouped.length >= maxPages) {
-      debugPrint('   ⚠️ UYARI: Maksimum $maxPages sayfa oluşturuldu. Kalan sorular göz ardı edildi.');
-    }
-    
-    // Eğer hiç gruplanmış soru yoksa, tüm resimleri topla ve 3'er 3'er grupla (fallback)
     if (grouped.isEmpty) {
-      debugPrint('⚠️ Hiç soru gruplanamadı, tüm resimleri topluyorum...');
       final allIds = <String>[];
-      
       for (int i = 0; i < widget.questions.length; i++) {
         final question = widget.questions[i];
         final imageIds = _getImageFileIds(question);
         allIds.addAll(imageIds);
-        debugPrint('   Soru ${i + 1}: ${imageIds.length} resim eklendi');
       }
       
-      debugPrint('   Toplam resim: ${allIds.length}');
-      
       if (allIds.length >= 3) {
-        const maxPages = 5;
         for (int i = 0; i < allIds.length && grouped.length < maxPages; i += 3) {
           if (i + 3 <= allIds.length) {
             final pageImages = allIds.sublist(i, i + 3);
-            // Bu sayfadaki resimlerin hangi soruya ait olduğunu bul
             final questionIndex = (i ~/ 3);
             final question = questionIndex < widget.questions.length 
                 ? widget.questions[questionIndex] 
@@ -193,28 +151,12 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
               correctIndex: correctIndex,
               instruction: question.data?['instruction']?.toString(),
             ));
-            debugPrint('   ✅ Sayfa ${grouped.length} oluşturuldu');
-            debugPrint('      Resimler: $pageImages');
-            debugPrint('      Doğru cevap index: $correctIndex (${pageImages[correctIndex]})');
           }
-        }
-        if (grouped.length >= maxPages) {
-          debugPrint('   ⚠️ UYARI: Maksimum $maxPages sayfa oluşturuldu. Kalan resimler göz ardı edildi.');
         }
       }
     }
     
     _groupedQuestions = grouped;
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('📦 GRUPLAMA TAMAMLANDI');
-    debugPrint('   Toplam sayfa sayısı: ${grouped.length} (MAKSİMUM: 5)');
-    if (grouped.length > 5) {
-      debugPrint('   ❌❌❌ HATA: ${grouped.length} sayfa oluşturuldu ama maksimum 5 olmalı! ❌❌❌');
-    }
-    for (int i = 0; i < grouped.length; i++) {
-      debugPrint('   Sayfa ${i + 1}: ${grouped[i].imageFileIds.length} resim - Doğru cevap index: ${grouped[i].correctIndex}');
-    }
-    debugPrint('═══════════════════════════════════════');
   }
 
   String _getFileUrl(String? fileId) {
@@ -379,93 +321,62 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       }
     }
     
-    debugPrint('   ✅ Toplam ${correctMap.length} resim için doğru/yanlış bilgisi bulundu');
     return correctMap;
   }
 
   int _getCorrectAnswerIndexForPage(MiniQuestion question, List<String> pageImageIds) {
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('🔍 DOĞRU CEVAP KONTROLÜ - Sayfa ${_currentPage + 1}');
-    debugPrint('   Sayfa resimleri: $pageImageIds');
-    
-    // ÖNCE: Her resim için doğru/yanlış bilgisini al (admin panelinden işaretlenen)
     final correctMap = _getImageCorrectMap(question);
-    debugPrint('   🔍 Doğru/yanlış haritası: $correctMap');
     
-    // Sayfa resimleri içinde doğru olanı bul
     for (int i = 0; i < pageImageIds.length; i++) {
       final imageId = pageImageIds[i];
       if (correctMap[imageId] == true) {
-        debugPrint('   ✅ Doğru resim bulundu: index $i (ID: $imageId)');
         return i;
       }
     }
     
-    // EĞER doğru/yanlış haritası boşsa, eski yöntemleri dene
-    debugPrint('   ⚠️ Doğru/yanlış haritası boş, eski yöntemler deneniyor...');
-    debugPrint('   question.correctAnswer: "${question.correctAnswer}"');
-    
-    // question.correctAnswer'ı kontrol et
     if (question.correctAnswer != null && question.correctAnswer!.isNotEmpty) {
       final answerStr = question.correctAnswer!.trim();
-      debugPrint('   🔍 correctAnswer: "$answerStr"');
-      
-      // 1. Resim ID'leri içinde ara
       final foundIndex = pageImageIds.indexOf(answerStr);
       if (foundIndex >= 0) {
-        debugPrint('   ✅ correctAnswer resim ID olarak bulundu: index $foundIndex');
         return foundIndex;
       }
       
-      // 2. Integer olarak parse et (0, 1, 2)
       final answer = int.tryParse(answerStr);
       if (answer != null && answer >= 0 && answer < pageImageIds.length) {
-        debugPrint('   ✅ correctAnswer (integer) bulundu: $answer');
         return answer;
       }
     }
     
-    // data içinden kontrol et
     if (question.data != null) {
-      // correctImageFileId
       if (question.data!['correctImageFileId'] != null) {
         final correctId = question.data!['correctImageFileId'].toString().trim();
         final foundIndex = pageImageIds.indexOf(correctId);
         if (foundIndex >= 0) {
-          debugPrint('   ✅ correctImageFileId bulundu: index $foundIndex');
           return foundIndex;
         }
       }
       
-      // correctIndex
       if (question.data!['correctIndex'] != null) {
         final indexStr = question.data!['correctIndex'].toString().trim();
         final index = int.tryParse(indexStr);
         if (index != null && index >= 0 && index < pageImageIds.length) {
-          debugPrint('   ✅ correctIndex bulundu: $index');
           return index;
         }
       }
       
-      // correctAnswer data içinde
       if (question.data!['correctAnswer'] != null) {
         final answerStr = question.data!['correctAnswer'].toString().trim();
         final foundIndex = pageImageIds.indexOf(answerStr);
         if (foundIndex >= 0) {
-          debugPrint('   ✅ correctAnswer (data) bulundu: index $foundIndex');
           return foundIndex;
         }
         final answer = int.tryParse(answerStr);
         if (answer != null && answer >= 0 && answer < pageImageIds.length) {
-          debugPrint('   ✅ correctAnswer (data, integer) bulundu: $answer');
           return answer;
         }
       }
     }
     
-    debugPrint('   ❌ HATA: Doğru cevap bulunamadı!');
-    debugPrint('   ⚠️ Varsayılan olarak 0 (ilk resim) kullanılıyor');
-    debugPrint('═══════════════════════════════════════');
     return 0;
   }
   
@@ -494,7 +405,7 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       if (_groupedQuestions != null && _currentPage == _groupedQuestions!.length - 1) {
         // Aktiviteyi oturum servisine ekle (TAMAMLANMIŞ olarak işaretle)
         final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-        final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+        final selectedStudent = studentSelectionProvider.selectedStudent;
         
         if (selectedStudent != null && _activityStartTime != null) {
           final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
@@ -533,7 +444,7 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
         await _audioPlayer.play(UrlSource(url));
       }
     } catch (e) {
-      debugPrint('Tebrikler sesi çalınamadı: $e');
+      debugPrint('Congratulations audio error: $e');
     }
   }
 
@@ -591,12 +502,10 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                 const Duration(seconds: 2),
                 onTimeout: () {
                   // Timeout durumunda sessizce devam et
-                  debugPrint('⚠️ Image preload timeout: $imageUrl');
                 },
               );
             } catch (e) {
               // Görüntü kodlama hatası dahil tüm hataları yakala
-              debugPrint('⚠️ Image preload error: $imageUrl - $e');
             }
           });
         }
@@ -788,11 +697,6 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
     final correctIndex = groupedQuestion.correctIndex;
     
     // Debug: Resim sayısını kontrol et
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('📄 SAYFA ${_currentPage + 1}/${_groupedQuestions!.length}');
-    debugPrint('🖼️ Resim sayısı: ${imageFileIds.length}');
-    debugPrint('🖼️ Resim ID\'leri: $imageFileIds');
-    debugPrint('✅ Doğru cevap index: $correctIndex');
     debugPrint('═══════════════════════════════════════');
     
     // Eğer 3 resim yoksa, detaylı hata mesajı göster
@@ -1294,4 +1198,5 @@ class StarFieldPainter extends CustomPainter {
     return oldDelegate.opacity != opacity;
   }
 }
+
 

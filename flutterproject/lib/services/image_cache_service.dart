@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Image Cache Service for performance optimization
 /// Provides improved image loading with caching and error handling
@@ -8,7 +9,6 @@ class ImageCacheService {
   static final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration cacheExpiry = Duration(hours: 24); // 24 hour cache
 
-  /// Get optimized image widget with loading states
   static Widget getOptimizedImage(
     String url, {
     double? width,
@@ -24,53 +24,56 @@ class ImageCacheService {
     Widget? placeholder,
     Widget? errorWidget,
   }) {
-    return Image.network(
-      url,
+    final int memCacheWidth = cacheWidth ?? (width != null ? (width * 2).round() : 800);
+    final int memCacheHeight = cacheHeight ?? (height != null ? (height * 2).round() : 800);
+    
+    return CachedNetworkImage(
+      imageUrl: url,
       width: width,
       height: height,
       fit: fit,
-      semanticLabel: semanticLabel,
-      excludeFromSemantics: excludeFromSemantics,
       color: color,
       colorBlendMode: colorBlendMode,
       filterQuality: filterQuality,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        
-        return placeholder ?? Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-          ),
-          child: Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / 
-                    loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('❌ Image loading error: $url - $error');
-        return errorWidget ?? Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            border: Border.all(color: Colors.grey[400]!),
-          ),
-          child: Icon(
-            Icons.broken_image,
-            size: (width ?? height ?? 48) / 2,
-            color: Colors.grey[600],
-          ),
-        );
-      },
+      memCacheWidth: memCacheWidth.clamp(100, 1080),
+      memCacheHeight: memCacheHeight.clamp(100, 1080),
+      maxWidthDiskCache: memCacheWidth.clamp(100, 1080),
+      maxHeightDiskCache: memCacheHeight.clamp(100, 1080),
+      placeholder: placeholder != null
+          ? (context, url) => placeholder
+          : (context, url) => Container(
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                ),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+      errorWidget: errorWidget != null
+          ? (context, url, error) {
+              debugPrint('❌ Image loading error: $url - $error');
+              return errorWidget;
+            }
+          : (context, url, error) {
+              debugPrint('❌ Image loading error: $url - $error');
+              return Container(
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  border: Border.all(color: Colors.grey[400] ?? Colors.grey),
+                ),
+                child: Icon(
+                  Icons.broken_image,
+                  size: (width ?? height ?? 48) / 2,
+                  color: Colors.grey[600],
+                ),
+              );
+            },
     );
   }
 
@@ -84,21 +87,15 @@ class ImageCacheService {
       );
       
       await image.resolve(config);
-      debugPrint('✅ Image preloaded: $url');
     } catch (e) {
-      debugPrint('⚠️  Image preload failed: $url - $e');
+      // Ignore preload errors
     }
   }
 
-  /// Preload multiple images
   static Future<void> preloadImages(List<String> urls) async {
-    debugPrint('🚀 Preloading ${urls.length} images...');
-    
     await Future.wait(
       urls.map((url) => preloadImage(url))
     );
-    
-    debugPrint('✅ All images preloaded');
   }
 
   /// Clear expired images from cache
@@ -117,9 +114,7 @@ class ImageCacheService {
       _cacheTimestamps.remove(key);
     });
     
-    if (expiredKeys.isNotEmpty) {
-      debugPrint('🧹 Cleared ${expiredKeys.length} expired images from cache');
-    }
+    // Cache cleared silently
   }
 
   /// Get cache statistics

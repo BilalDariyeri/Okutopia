@@ -16,6 +16,15 @@ class StatisticsService {
     return await TokenService.getToken();
   }
 
+  Exception _handleDioException(DioException e, String defaultMessage) {
+    if (e.response != null) {
+      AppLogger.error('Request failed - server error', e);
+      return Exception(e.response?.data['message'] ?? defaultMessage);
+    }
+    AppLogger.error('Request failed - connection error', e);
+    return Exception('Bağlantı hatası: ${e.message}');
+  }
+
   /// Öğrenci oturumu başlat
   /// POST /api/statistics/start-session
   Future<Map<String, dynamic>> startSession(String studentId) async {
@@ -47,12 +56,7 @@ class StatisticsService {
         throw Exception(response.data['message'] ?? 'Oturum başlatılamadı.');
       }
     } on DioException catch (e) {
-      if (e.response != null) {
-        AppLogger.error('Session start failed - server error', e);
-        throw Exception(e.response?.data['message'] ?? 'Oturum başlatılamadı.');
-      }
-      AppLogger.error('Session start failed - connection error', e);
-      throw Exception('Bağlantı hatası: ${e.message}');
+      throw _handleDioException(e, 'Oturum başlatılamadı.');
     }
   }
 
@@ -100,12 +104,7 @@ class StatisticsService {
         throw Exception(response.data['message'] ?? 'Oturum bitirilemedi.');
       }
     } on DioException catch (e) {
-      if (e.response != null) {
-        AppLogger.error('Session end failed - server error', e);
-        throw Exception(e.response?.data['message'] ?? 'Oturum bitirilemedi.');
-      }
-      AppLogger.error('Session end failed - connection error', e);
-      throw Exception('Bağlantı hatası: ${e.message}');
+      throw _handleDioException(e, 'Oturum bitirilemedi.');
     }
   }
 
@@ -136,12 +135,7 @@ class StatisticsService {
         throw Exception(response.data['message'] ?? 'İstatistikler yüklenemedi.');
       }
     } on DioException catch (e) {
-      if (e.response != null) {
-        AppLogger.error('Statistics fetch failed - server error', e);
-        throw Exception(e.response?.data['message'] ?? 'İstatistikler yüklenemedi.');
-      }
-      AppLogger.error('Statistics fetch failed - connection error', e);
-      throw Exception('Bağlantı hatası: ${e.message}');
+      throw _handleDioException(e, 'İstatistikler yüklenemedi.');
     }
   }
 
@@ -185,12 +179,7 @@ class StatisticsService {
         throw Exception(response.data['message'] ?? 'Email gönderilemedi.');
       }
     } on DioException catch (e) {
-      if (e.response != null) {
-        AppLogger.error('Session email failed - server error', e);
-        throw Exception(e.response?.data['message'] ?? 'Email gönderilemedi.');
-      }
-      AppLogger.error('Session email failed - connection error', e);
-      throw Exception('Bağlantı hatası: ${e.message}');
+      throw _handleDioException(e, 'Email gönderilemedi.');
     }
   }
 
@@ -225,12 +214,7 @@ class StatisticsService {
         throw Exception(response.data['message'] ?? 'Email gönderilemedi.');
       }
     } on DioException catch (e) {
-      if (e.response != null) {
-        AppLogger.error('Daily email failed - server error', e);
-        throw Exception(e.response?.data['message'] ?? 'Email gönderilemedi.');
-      }
-      AppLogger.error('Daily email failed - connection error', e);
-      throw Exception('Bağlantı hatası: ${e.message}');
+      throw _handleDioException(e, 'Email gönderilemedi.');
     }
   }
 }

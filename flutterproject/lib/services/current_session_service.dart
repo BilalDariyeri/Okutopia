@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Mevcut oturum için aktivite takibi servisi
 /// Öğrenci giriş yaptığından beri yapılan aktiviteleri hafızada tutar
 class CurrentSessionService {
@@ -26,7 +24,6 @@ class CurrentSessionService {
     _sessionData[studentId] = [];
     _sessionStartTimes[studentId] = DateTime.now();
     _sessionTotalDurations[studentId] = Duration.zero;
-    debugPrint('✅ Oturum başlatıldı: $studentId');
   }
 
   /// Oturum toplam süresini güncelle (ActivityTimer'dan)
@@ -64,7 +61,6 @@ class CurrentSessionService {
     );
 
     _sessionData[studentId]!.add(activity);
-    debugPrint('✅ Aktivite eklendi: $activityTitle - $durationSeconds s - Tamamlandı: $isCompleted');
   }
 
   /// Oturum verilerini getir
@@ -100,15 +96,12 @@ class CurrentSessionService {
     _sessionData.remove(studentId);
     _sessionStartTimes.remove(studentId);
     _sessionTotalDurations.remove(studentId);
-    debugPrint('✅ Oturum temizlendi: $studentId');
   }
 
-  /// Tüm oturumları temizle
   void clearAllSessions() {
     _sessionData.clear();
     _sessionStartTimes.clear();
     _sessionTotalDurations.clear();
-    debugPrint('✅ Tüm oturumlar temizlendi');
   }
 }
 

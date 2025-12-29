@@ -300,6 +300,10 @@ class _LetterCDottedScreenState extends State<LetterCDottedScreen>
                                           fit: BoxFit.contain,
                                           width: 320,
                                           height: 320,
+                                          memCacheWidth: 640, // 320 * 2 for retina displays
+                                          memCacheHeight: 640,
+                                          maxWidthDiskCache: 640,
+                                          maxHeightDiskCache: 640,
                                           placeholder: (context, url) => Container(
                                             color: Colors.white,
                                             child: const Center(

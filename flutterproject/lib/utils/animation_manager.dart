@@ -19,17 +19,12 @@ class AnimationManager {
     // Return existing controller if available and not disposed
     if (_controllers.containsKey(key) && _controllers[key] != null) {
       if (!_controllers[key]!.isDismissed && !_controllers[key]!.isCompleted) {
-        debugPrint('♻️  Reusing animation controller: $key');
         return _controllers[key]!;
       } else {
-        // Controller is disposed, remove it
-        debugPrint('🗑️  Removing disposed controller: $key');
         _controllers.remove(key);
         _vsyncProviders.remove(key);
       }
     }
-
-    debugPrint('🎬 Creating new animation controller: ${debugLabel ?? key}');
     final controller = AnimationController(
       duration: duration ?? const Duration(seconds: 2),
       vsync: vsync,
@@ -47,7 +42,6 @@ class AnimationManager {
     if (_controllers.containsKey(key)) {
       final controller = _controllers[key];
       if (controller != null) {
-        debugPrint('🗑️  Disposing animation controller: $key');
         controller.dispose();
       }
       _controllers.remove(key);
@@ -55,12 +49,8 @@ class AnimationManager {
     }
   }
 
-  /// Dispose all controllers (call on app exit)
   static void disposeAll() {
-    debugPrint('🗑️  Disposing all ${_controllers.length} animation controllers');
-    
     _controllers.forEach((key, controller) {
-      debugPrint('🗑️  Disposing: $key');
       controller.dispose();
     });
     

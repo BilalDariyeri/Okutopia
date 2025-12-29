@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-/// Zero-Loading UI için Optimize Edilmiş Resim Widget'ı
-/// Memory tasarrufu için cacheWidth ve cacheHeight kullanır
 class OptimizedImage extends StatelessWidget {
   final String imageUrl;
   final BoxFit fit;
@@ -29,7 +27,6 @@ class OptimizedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ekran boyutuna göre cache boyutunu belirle (performans için küçültüldü)
     final screenWidth = MediaQuery.of(context).size.width;
     final maxCacheWidth = cacheWidth ?? (screenWidth * 1.2).round().clamp(300, 500);
     final maxCacheHeight = cacheHeight ?? 500;
@@ -39,10 +36,8 @@ class OptimizedImage extends StatelessWidget {
       fit: fit,
       width: width,
       height: height,
-      // 💡 PERFORMANS: Resim boyutunu optimize et (memory tasarrufu)
       memCacheWidth: maxCacheWidth,
       memCacheHeight: maxCacheHeight,
-      // Görüntü kodlama hatası için maxWidthDiskCache ekle
       maxWidthDiskCache: maxCacheWidth,
       maxHeightDiskCache: maxCacheHeight,
       placeholder: placeholder != null

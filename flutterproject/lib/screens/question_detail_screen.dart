@@ -66,7 +66,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     
     // Toplam oturum süresini CurrentSessionService'den al
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     if (selectedStudent != null) {
       _totalSessionDuration = _sessionService.getSessionTotalDuration(selectedStudent.id);
     }
@@ -668,12 +668,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
 
     final question = widget.questions[_currentIndex];
     
-    // Debug: Soru tipini kontrol et
-    AppLogger.debug('QuestionDetailScreen - Question Type: ${question.questionType}');
-    AppLogger.debug('QuestionDetailScreen - Question Format: ${question.questionFormat}');
-    AppLogger.debug('QuestionDetailScreen - Question Data: ${question.data}');
-    AppLogger.debug('QuestionDetailScreen - Activity Title: ${widget.activity.title}');
-    
     // Kelimede harf bulma soru tipi için özel ekran
     final questionType = question.questionType.toString().toUpperCase();
     final questionFormat = (question.questionFormat ?? question.questionType).toString().toUpperCase();
@@ -688,119 +682,35 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
         contentObject['words'] is List &&
         (contentObject['words'] as List).isNotEmpty;
     
-    AppLogger.debug('Has words array: $hasWordsArray');
-    AppLogger.debug('ContentObject: $contentObject');
-    
-    // Harf yazımı kontrolü (önce harf yazımını kontrol et) - ÇOK AGRESİF
+    // Harf yazımı kontrolü
     final questionTextForCheck = _getQuestionText(question);
     final questionTextUpper = questionTextForCheck.toUpperCase();
     
-    // Yazı tahtası kontrolü (en spesifik - önce kontrol et)
-    final isWritingBoard = 
-        questionFormat == 'YAZI_TAHTASI' ||
-        questionType == 'YAZI_TAHTASI' ||
-        questionFormat.contains('YAZI_TAHTASI') ||
-        questionType.contains('YAZI_TAHTASI') ||
-        questionFormat.contains('WRITING_BOARD') ||
-        questionType.contains('WRITING_BOARD') ||
-        questionTextUpper.contains('YAZI TAHTASI') ||
-        questionTextUpper.contains('YAZI TAHTA') ||
-        adminNote.contains('YAZI TAHTASI') ||
-        adminNote.contains('YAZI TAHTA') ||
-        activityTitle.contains('YAZI TAHTASI') ||
-        activityTitle.contains('YAZI TAHTA');
+    final writingBoardPatterns = ['YAZI_TAHTASI', 'WRITING_BOARD', 'YAZI TAHTASI', 'YAZI TAHTA'];
+    final writingBoardFields = [questionFormat, questionType, questionTextUpper, adminNote, activityTitle];
+    final isWritingBoard = writingBoardFields.any((field) => writingBoardPatterns.any((pattern) => field.contains(pattern)));
     
-    // Harf noktalı yazım kontrolü (önce noktalı yazımı kontrol et - en spesifik)
-    final isLetterDotted = 
-        questionFormat == 'NOKTALI_YAZIM' ||
-        questionType == 'NOKTALI_YAZIM' ||
-        questionFormat.contains('NOKTALI_YAZIM') ||
-        questionType.contains('NOKTALI_YAZIM') ||
-        questionFormat.contains('DOTTED') ||
-        questionType.contains('DOTTED') ||
-        questionTextUpper.contains('NOKTALI YAZIM') ||
-        questionTextUpper.contains('NOKTALI YAZ') ||
-        questionTextUpper.contains('NOKTALI') ||
-        adminNote.contains('NOKTALI YAZIM') ||
-        adminNote.contains('NOKTALI YAZ') ||
-        adminNote.contains('NOKTALI') ||
-        activityTitle.contains('NOKTALI YAZIM') ||
-        activityTitle.contains('NOKTALI YAZ') ||
-        activityTitle.contains('NOKTALI');
+    final dottedPatterns = ['NOKTALI_YAZIM', 'DOTTED', 'NOKTALI YAZIM', 'NOKTALI YAZ', 'NOKTALI'];
+    final dottedFields = [questionFormat, questionType, questionTextUpper, adminNote, activityTitle];
+    final isLetterDotted = dottedFields.any((field) => dottedPatterns.any((pattern) => field.contains(pattern)));
     
-    // Harf serbest çizim kontrolü (önce serbest çizimi kontrol et)
-    final isLetterDrawing = 
-        questionFormat == 'SERBEST_CIZIM' ||
-        questionType == 'SERBEST_CIZIM' ||
-        questionFormat.contains('SERBEST_CIZIM') ||
-        questionType.contains('SERBEST_CIZIM') ||
-        questionFormat.contains('LETTER_DRAWING') ||
-        questionType.contains('LETTER_DRAWING') ||
-        questionFormat.contains('FREE_DRAWING') ||
-        questionType.contains('FREE_DRAWING') ||
-        questionTextUpper.contains('SERBEST ÇİZİM') ||
-        questionTextUpper.contains('SERBEST ÇIZIM') ||
-        questionTextUpper.contains('SERBEST') ||
-        adminNote.contains('SERBEST ÇİZİM') ||
-        adminNote.contains('SERBEST ÇIZIM') ||
-        adminNote.contains('SERBEST') ||
-        activityTitle.contains('SERBEST ÇİZİM') ||
-        activityTitle.contains('SERBEST ÇIZIM') ||
-        activityTitle.contains('SERBEST');
+    final drawingPatterns = ['SERBEST_CIZIM', 'LETTER_DRAWING', 'FREE_DRAWING', 'SERBEST ÇİZİM', 'SERBEST ÇIZIM', 'SERBEST'];
+    final drawingFields = [questionFormat, questionType, questionTextUpper, adminNote, activityTitle];
+    final isLetterDrawing = drawingFields.any((field) => drawingPatterns.any((pattern) => field.contains(pattern)));
     
-    // Harf yazımı kontrolü - ÇOK AGRESİF (her şekilde tespit et)
-    final isLetterWriting = 
-        questionFormat == 'HARF_YAZIMI' ||
-        questionType == 'HARF_YAZIMI' ||
-        questionFormat.contains('HARF_YAZIMI') ||
-        questionType.contains('HARF_YAZIMI') ||
-        questionFormat.contains('LETTER_WRITING') ||
-        questionType.contains('LETTER_WRITING') ||
-        questionTextUpper.contains('NASIL YAZILIR') ||
-        questionTextUpper.contains('YAZILIR') ||
-        questionTextUpper.contains('YAZIM') ||
-        adminNote.contains('NASIL YAZILIR') ||
-        adminNote.contains('YAZILIR') ||
-        adminNote.contains('YAZIM') ||
-        adminNote.contains('HARF YAZIMI') ||
-        adminNote.contains('HARF_YAZIMI') ||
-        activityTitle.contains('YAZIM') ||
-        activityTitle.contains('YAZILIR') ||
-        activityTitle.contains('HARF YAZIMI') ||
-        activityTitle.contains('HARF_YAZIMI') ||
-        activityTitle.contains('HARF YAZ') ||
-        // Eğer activity title'da "harf" ve ("yazım" veya "nasıl") geçiyorsa
-        (activityTitle.contains('HARF') && (activityTitle.contains('YAZIM') || activityTitle.contains('YAZILIR') || activityTitle.contains('YAZ')));
+    final writingPatterns = ['HARF_YAZIMI', 'LETTER_WRITING', 'NASIL YAZILIR', 'YAZILIR', 'YAZIM', 'HARF YAZIMI'];
+    final writingFields = [questionFormat, questionType, questionTextUpper, adminNote];
+    final isLetterWriting = writingFields.any((field) => writingPatterns.any((pattern) => field.contains(pattern))) ||
+        ['YAZIM', 'YAZILIR', 'HARF YAZIMI', 'HARF_YAZIMI', 'HARF YAZ'].any((pattern) => activityTitle.contains(pattern)) ||
+        (activityTitle.contains('HARF') && ['YAZIM', 'YAZILIR', 'YAZ'].any((pattern) => activityTitle.contains(pattern)));
     
-    // Kelimede harf bulma kontrolü - ÇOK AGRESİF
-    // ÖNCE: questionFormat veya questionType'a bak
-    final isLetterFind = 
-        questionFormat == 'KELIMEDE_HARF_BULMA' ||
-        questionType == 'KELIMEDE_HARF_BULMA' || 
-        questionFormat.contains('KELIMEDE_HARF_BULMA') || 
-        questionType.contains('KELIMEDE_HARF_BULMA') ||
-        questionFormat.contains('LETTER_FIND') ||
-        questionType.contains('LETTER_FIND') ||
-        // Admin note veya activity title'da "kelimede" geçiyorsa
-        (adminNote.isNotEmpty && (adminNote.contains('KELIMEDE') || adminNote.contains('BULMA'))) ||
-        (activityTitle.isNotEmpty && (activityTitle.contains('KELIMEDE') || activityTitle.contains('BULMA'))) ||
-        // contentObject'te words array'i varsa
-        hasWordsArray;
-    
-    AppLogger.debug('Is Writing Board: $isWritingBoard');
-    AppLogger.debug('Is Letter Dotted: $isLetterDotted');
-    AppLogger.debug('Is Letter Drawing: $isLetterDrawing');
-    AppLogger.debug('Is Letter Writing: $isLetterWriting');
-    AppLogger.debug('Is Letter Find: $isLetterFind');
-    AppLogger.debug('Question Type: "$questionType"');
-    AppLogger.debug('Question Format: "$questionFormat"');
-    AppLogger.debug('Admin Note: "$adminNote"');
-    AppLogger.debug('Activity Title: "$activityTitle"');
-    AppLogger.debug('Has Words Array: $hasWordsArray');
-    AppLogger.debug('ContentObject Type: ${contentObject.runtimeType}');
+    final findPatterns = ['KELIMEDE_HARF_BULMA', 'LETTER_FIND', 'KELIMEDE', 'BULMA'];
+    final isLetterFind = hasWordsArray ||
+        [questionFormat, questionType].any((field) => findPatterns.any((pattern) => field.contains(pattern))) ||
+        (adminNote.isNotEmpty && ['KELIMEDE', 'BULMA'].any((pattern) => adminNote.contains(pattern))) ||
+        (activityTitle.isNotEmpty && ['KELIMEDE', 'BULMA'].any((pattern) => activityTitle.contains(pattern)));
     
     if (isWritingBoard) {
-      AppLogger.info('LetterWritingBoardScreen\'e yönlendiriliyor...');
       return LetterWritingBoardScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -809,7 +719,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     }
     
     if (isLetterDotted) {
-      AppLogger.info('LetterDottedScreen\'e yönlendiriliyor...');
       return LetterDottedScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -818,7 +727,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     }
     
     if (isLetterDrawing) {
-      AppLogger.info('LetterDrawingScreen\'e yönlendiriliyor...');
       return LetterDrawingScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -827,7 +735,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     }
     
     if (isLetterWriting) {
-      AppLogger.info('LetterWritingScreen\'e yönlendiriliyor...');
       return LetterWritingScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -836,7 +743,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     }
     
     if (isLetterFind) {
-      AppLogger.info('LetterFindScreen\'e yönlendiriliyor...');
       return LetterFindScreen(
         activity: widget.activity,
         questions: widget.questions,
@@ -844,7 +750,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
       );
     }
     
-    AppLogger.warning('Normal soru ekranı gösteriliyor - QuestionType: $questionType, Format: $questionFormat');
     
     final questionText = questionTextForCheck;
     final instructionText = _getInstructionText(question);

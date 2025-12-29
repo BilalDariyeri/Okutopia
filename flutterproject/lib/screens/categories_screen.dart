@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
 import '../providers/auth_provider.dart';
-import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import '../providers/user_profile_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../providers/content_provider.dart';
 import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
@@ -96,7 +96,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
   Future<void> _initializeSession() async {
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) return;
     
@@ -132,7 +132,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     
     // CurrentSessionService'e güncelle
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     if (selectedStudent != null) {
       _sessionService.updateSessionTotalDuration(selectedStudent.id, duration);
     }
@@ -202,7 +202,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     final authProvider = Provider.of<AuthProvider>(context, listen: false); // listen: false - gereksiz rebuild'i önle
     final contentProvider = Provider.of<ContentProvider>(context, listen: false); // listen: false - sadece veri okuma için
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     // Cache-First: Provider'dan kategorileri al (anında gösterilir)
     final categories = contentProvider.categories ?? [];

@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import '../providers/user_profile_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../services/classroom_service.dart';
 import '../models/student_model.dart';
 import '../models/user_model.dart';
@@ -17,8 +17,6 @@ class StudentSelectionScreen extends StatefulWidget {
 
 class _StudentSelectionScreenState extends State<StudentSelectionScreen> with TickerProviderStateMixin {
   final ClassroomService _classroomService = ClassroomService();
-  List<Student> _students = [];
-  bool _isLoading = true;
   String? _errorMessage;
 
   // Renk paleti (her öğrenci için farklı renk)
@@ -70,7 +68,9 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
       vsync: this,
     )..repeat();
     
-    _loadStudents();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadStudentsFromProvider();
+    });
   }
 
   @override
@@ -83,59 +83,30 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
     super.dispose();
   }
 
-  Future<void> _loadStudents() async {
+  Future<void> _loadStudentsFromProvider({bool forceRefresh = false}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
 
     try {
       final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+      final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
       final user = userProfileProvider.user;
 
       if (user == null) {
-        throw Exception('Kullanıcı bilgisi bulunamadı.');
+        setState(() {
+          _errorMessage = 'Kullanıcı bilgisi bulunamadı.';
+        });
+        return;
       }
 
-      // Önce UserProfileProvider'dan classroom bilgisini kontrol et
-      Classroom? classroom = userProfileProvider.classroom;
-      
-      // Debug: Classroom bilgisini kontrol et
-      debugPrint('🔍 Classroom kontrolü:');
-      debugPrint('  - AuthProvider.classroom: ${classroom?.id}');
-      debugPrint('  - Classroom name: ${classroom?.name}');
-      debugPrint('  - User ID: ${user.id}');
-
-      // Eğer classroom yoksa, öğretmenin sınıfını API'den çek
-      if (classroom == null || classroom.id.isEmpty) {
-        debugPrint('⚠️ Classroom null veya boş, API\'den çekiliyor...');
-        final classrooms = await _classroomService.getTeacherClassrooms(user.id);
-        if (!mounted) return;
-        if (classrooms.isEmpty) {
-          throw Exception('Öğretmenin sınıfı bulunamadı. Lütfen yönetici ile iletişime geçin.');
-        }
-        // İlk sınıfı kullan (genelde öğretmenin tek sınıfı olur)
-        classroom = Classroom(
-          id: classrooms.first.id,
-          name: classrooms.first.name,
-          teacher: user,
-          students: [],
-        );
-        debugPrint('✅ API\'den classroom çekildi: ${classroom.id} - ${classroom.name}');
-      } else {
-        debugPrint('✅ AuthProvider\'dan classroom kullanılıyor: ${classroom.id} - ${classroom.name}');
-      }
-
-      final response = await _classroomService.getClassroomStudents(
-        classroom.id,
-        user.id,
+      await studentSelectionProvider.loadStudents(
+        user: user,
+        classroom: userProfileProvider.classroom,
+        forceRefresh: forceRefresh,
       );
-      if (!mounted) return;
 
+      if (!mounted) return;
       setState(() {
-        _students = response.students;
-        _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -143,16 +114,18 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         String errorMsg = e.toString().replaceAll('Exception: ', '');
         // Daha kullanıcı dostu hata mesajları
         if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
-          errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
+          _errorMessage = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
         } else if (errorMsg.contains('401') || errorMsg.contains('Token')) {
-          errorMsg = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
+          _errorMessage = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
         } else if (errorMsg.contains('403')) {
-          errorMsg = 'Bu işlem için yetkiniz bulunmamaktadır.';
+          _errorMessage = 'Bu işlem için yetkiniz bulunmamaktadır.';
         } else if (errorMsg.contains('404')) {
-          errorMsg = 'Sınıf bulunamadı.';
+          _errorMessage = 'Sınıf bulunamadı.';
+        } else if (errorMsg.contains('Bağlantı') || errorMsg.contains('timeout')) {
+          _errorMessage = 'İnternet bağlantınızı kontrol edin.';
+        } else {
+          _errorMessage = errorMsg;
         }
-        _errorMessage = errorMsg;
-        _isLoading = false;
       });
     }
   }
@@ -326,8 +299,16 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
-                                // Listeyi yenile
-                                _loadStudents();
+                                final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+                                final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+                                final user = userProfileProvider.user;
+                                if (user != null) {
+                                  await studentSelectionProvider.loadStudents(
+                                    user: user,
+                                    classroom: userProfileProvider.classroom,
+                                    forceRefresh: true,
+                                  );
+                                }
                               }
                             } catch (e) {
                               if (dialogContext.mounted) {
@@ -381,110 +362,117 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
     final userProfileProvider = Provider.of<UserProfileProvider>(context);
     final user = userProfileProvider.user;
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF6C5CE7), // Açık mor
-              const Color(0xFF4834D4), // Orta mor
-              const Color(0xFF2D1B69), // Koyu mor
-            ],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Yıldızlar ve gezegenler arka plan (animasyonlu)
-            _buildBackgroundDecorations(),
-            // Ana içerik
-            SafeArea(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : _errorMessage != null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.error_outline,
-                                color: Colors.white,
-                                size: 64,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _errorMessage!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton(
-                                onPressed: _loadStudents,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: const Color(0xFF4834D4),
-                                ),
-                                child: const Text('Tekrar Dene'),
-                              ),
-                            ],
+    return Consumer<StudentSelectionProvider>(
+      builder: (context, studentSelectionProvider, _) {
+        final students = studentSelectionProvider.studentsList;
+        final isLoading = studentSelectionProvider.isLoadingStudents;
+
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF6C5CE7), // Açık mor
+                  const Color(0xFF4834D4), // Orta mor
+                  const Color(0xFF2D1B69), // Koyu mor
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Yıldızlar ve gezegenler arka plan (animasyonlu)
+                _buildBackgroundDecorations(),
+                // Ana içerik
+                SafeArea(
+                  child: isLoading && students.isEmpty
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : Center(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(20),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: 800, // Maksimum genişlik
-                              ),
+                      : _errorMessage != null
+                          ? Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Header
-                                  _buildHeader(),
-                                  const SizedBox(height: 24),
-                                  // Öğretmen Kartı
-                                  if (user != null) _buildTeacherCard(user),
-                                  const SizedBox(height: 32),
-                                  // Öğrencilerim Başlığı ve Ekle Butonu
-                                  _buildStudentsHeader(),
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.white,
+                                    size: 64,
+                                  ),
                                   const SizedBox(height: 16),
-                                  // Öğrenci Kartları
-                                  if (_students.isEmpty)
-                                    _buildEmptyState()
-                                  else
-                                    _buildStudentCards(),
+                                  Text(
+                                    _errorMessage!,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  ElevatedButton(
+                                    onPressed: () => _loadStudentsFromProvider(forceRefresh: true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF4834D4),
+                                    ),
+                                    child: const Text('Tekrar Dene'),
+                                  ),
                                 ],
                               ),
+                            )
+                          : Center(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(20),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: 800, // Maksimum genişlik
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Header
+                                      _buildHeader(),
+                                      const SizedBox(height: 24),
+                                      // Öğretmen Kartı
+                                      if (user != null) _buildTeacherCard(user),
+                                      const SizedBox(height: 32),
+                                      // Öğrencilerim Başlığı ve Ekle Butonu
+                                      _buildStudentsHeader(),
+                                      const SizedBox(height: 16),
+                                      // Öğrenci Kartları
+                                      if (students.isEmpty)
+                                        _buildEmptyState()
+                                      else
+                                        _buildStudentCards(students),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _showAddStudentDialog();
-        },
-        backgroundColor: const Color(0xFF2ECC71),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Öğrenci Ekle',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
           ),
-        ),
-      ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () {
+              _showAddStudentDialog();
+            },
+            backgroundColor: const Color(0xFF2ECC71),
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text(
+              'Öğrenci Ekle',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -697,7 +685,6 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () async {
-            // 🔒 ARCHITECTURE: Logout'ta hem AuthProvider hem StudentSelectionProvider temizlenmeli
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.logout();
             final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
@@ -856,7 +843,7 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
     );
   }
 
-  Widget _buildStudentCards() {
+  Widget _buildStudentCards(List<Student> students) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -866,9 +853,9 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         mainAxisSpacing: 10,
         childAspectRatio: 3.5,
       ),
-      itemCount: _students.length,
+      itemCount: students.length,
       itemBuilder: (context, index) {
-        return _buildStudentCard(_students[index], index);
+        return _buildStudentCard(students[index], index);
       },
     );
   }
@@ -878,7 +865,6 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
 
     return GestureDetector(
       onTap: () async {
-        // 🔒 ARCHITECTURE: Öğrenciyi StudentSelectionProvider'a kaydet
         final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
         studentSelectionProvider.setSelectedStudent(student);
         

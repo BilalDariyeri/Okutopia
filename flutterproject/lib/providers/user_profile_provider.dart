@@ -3,13 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
-/// User Profile Provider - Kullanıcı profil bilgilerini yönetir
-/// 🔒 ARCHITECTURE: AuthProvider'dan ayrıldı - Sadece profil bilgilerinden sorumlu
 class UserProfileProvider with ChangeNotifier {
   final SharedPreferences _prefs;
 
   User? _user;
   Classroom? _classroom;
+  bool _isLoadingProfile = false;
 
   UserProfileProvider(this._prefs) {
     // Initialize profile from storage
@@ -20,14 +19,13 @@ class UserProfileProvider with ChangeNotifier {
     try {
       await _loadUserFromStorage();
     } catch (e) {
-      // Silently handle initialization errors
       debugPrint('Profile initialization error: $e');
     }
   }
 
-  // Getters
   User? get user => _user;
   Classroom? get classroom => _classroom;
+  bool get isLoadingProfile => _isLoadingProfile;
 
   // Kullanıcı bilgilerini storage'dan yükle
   Future<void> _loadUserFromStorage() async {
@@ -68,10 +66,16 @@ class UserProfileProvider with ChangeNotifier {
     _classroom = null;
   }
 
-  // Kullanıcı bilgilerini set et (login/register sonrası)
-  Future<void> setUser(User user, {Classroom? classroom}) async {
-    _user = user;
-    _classroom = classroom;
+  Future<void> setUser(User user, {Classroom? classroom, bool forceRefresh = false}) async {
+    if (!forceRefresh && _user != null && _user!.id == user.id) {
+      _user = user;
+      if (classroom != null) {
+        _classroom = classroom;
+      }
+    } else {
+      _user = user;
+      _classroom = classroom;
+    }
 
     // Kullanıcı bilgilerini shared preferences'a kaydet
     await _prefs.setString('user', jsonEncode(user.toJson()));
@@ -91,7 +95,6 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Kullanıcı bilgilerini güncelle
   Future<void> updateUser(User updatedUser) async {
     _user = updatedUser;
     // Kullanıcı bilgilerini shared preferences'a kaydet
@@ -99,7 +102,6 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Classroom bilgisini güncelle
   Future<void> updateClassroom(Classroom? classroom) async {
     _classroom = classroom;
     
@@ -117,10 +119,30 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Profil bilgilerini temizle (logout sonrası)
   Future<void> clearProfile() async {
     await _clearStoredUserData();
+    _isLoadingProfile = false;
     notifyListeners();
+  }
+
+  Future<void> refreshProfile({bool forceRefresh = false}) async {
+    if (!forceRefresh && _user != null) {
+      return;
+    }
+
+    // forceRefresh=true ise cache'den yeniden yükle
+    _isLoadingProfile = true;
+    notifyListeners();
+
+    try {
+      await _loadUserFromStorage();
+      _isLoadingProfile = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoadingProfile = false;
+      notifyListeners();
+      rethrow;
+    }
   }
 }
 

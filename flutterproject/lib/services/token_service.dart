@@ -15,29 +15,21 @@ class TokenService {
       // Check cache first
       if (_cachedToken != null && _tokenExpiry != null) {
         if (DateTime.now().isBefore(_tokenExpiry!)) {
-          debugPrint('✅ Token cache\'den alındı');
           return _cachedToken;
         } else {
-          debugPrint('⏰ Token cache süresi dolmuş, yeniden alınıyor');
           clearCache();
         }
       }
       
-      // Cache miss - fetch from secure storage
-      debugPrint('📂 Token disk\'ten okunuyor');
       _cachedToken = await _storage.read(key: 'token');
       
       if (_cachedToken != null) {
-        // Set cache expiry (assuming 1 hour validity)
         _tokenExpiry = DateTime.now().add(cacheExpiry);
-        debugPrint('🔑 Token cache\'lendi, expiry: ${_tokenExpiry}');
-      } else {
-        debugPrint('❌ Token bulunamadı');
       }
       
       return _cachedToken;
     } catch (e) {
-      debugPrint('❌ Token okuma hatası: $e');
+      debugPrint('Token read error: $e');
       clearCache();
       return null;
     }
@@ -49,12 +41,9 @@ class TokenService {
       _cachedToken = token;
       _tokenExpiry = DateTime.now().add(cacheExpiry);
       
-      // Also save to secure storage
       await _storage.write(key: 'token', value: token);
-      
-      debugPrint('✅ Token cache\'lendi');
     } catch (e) {
-      debugPrint('❌ Token cache hatası: $e');
+      debugPrint('Token cache error: $e');
     }
   }
 
@@ -62,7 +51,6 @@ class TokenService {
   static void clearCache() {
     _cachedToken = null;
     _tokenExpiry = null;
-    debugPrint('🧹 Token cache temizlendi');
   }
 
   /// Clear both cache and secure storage
@@ -70,9 +58,8 @@ class TokenService {
     try {
       clearCache();
       await _storage.delete(key: 'token');
-      debugPrint('🗑️  Token tamamen temizlendi');
     } catch (e) {
-      debugPrint('❌ Token temizleme hatası: $e');
+      debugPrint('Token clear error: $e');
     }
   }
 

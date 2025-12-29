@@ -7,7 +7,7 @@ import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
-import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import '../providers/student_selection_provider.dart';
 import '../utils/app_logger.dart';
 
 class LetterWritingBoardScreen extends StatefulWidget {
@@ -112,7 +112,7 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
   Future<void> _startActivityTracking() async {
     if (!mounted) return;
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
-    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent != null) {
       _studentId = selectedStudent.id; // dispose() için sakla
@@ -127,7 +127,6 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
 
   Future<void> _endActivityTracking({String? successStatus}) async {
     // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
-    // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     final studentId = _studentId ?? (mounted ? Provider.of<StudentSelectionProvider>(context, listen: false).selectedStudent?.id : null);
     
     if (studentId != null && _activityStartTime != null) {

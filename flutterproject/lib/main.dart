@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
-import 'providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
+import 'providers/user_profile_provider.dart';
 import 'providers/content_provider.dart';
 import 'providers/statistics_provider.dart';
-import 'providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
+import 'providers/student_selection_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/student_selection_screen.dart';
@@ -34,15 +34,14 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()), // 🔒 ARCHITECTURE: SharedPreferences artık gerekli değil
-        ChangeNotifierProvider(create: (_) => UserProfileProvider(prefs)), // 🔒 ARCHITECTURE: User profile ayrıldı
-        ChangeNotifierProvider(create: (_) => StudentSelectionProvider(prefs)), // 🔒 ARCHITECTURE: Student selection ayrıldı
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => UserProfileProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => StudentSelectionProvider(prefs)),
         ChangeNotifierProvider(create: (_) => ContentProvider()),
         ChangeNotifierProvider(create: (_) => StatisticsProvider()),
       ],
       child: Builder(
         builder: (context) {
-          // 🔒 ARCHITECTURE: AuthProvider'a UserProfileProvider referansını ver
           final authProvider = Provider.of<AuthProvider>(context, listen: false);
           final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
           authProvider.setUserProfileProvider(userProfileProvider);
