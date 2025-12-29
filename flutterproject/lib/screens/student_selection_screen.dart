@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../services/classroom_service.dart';
 import '../models/student_model.dart';
@@ -90,15 +91,15 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final user = authProvider.user;
+      final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+      final user = userProfileProvider.user;
 
       if (user == null) {
         throw Exception('Kullanıcı bilgisi bulunamadı.');
       }
 
-      // Önce AuthProvider'dan classroom bilgisini kontrol et
-      Classroom? classroom = authProvider.classroom;
+      // Önce UserProfileProvider'dan classroom bilgisini kontrol et
+      Classroom? classroom = userProfileProvider.classroom;
       
       // Debug: Classroom bilgisini kontrol et
       debugPrint('🔍 Classroom kontrolü:');
@@ -274,16 +275,16 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
                             });
 
                             try {
-                              final authProvider =
-                                  Provider.of<AuthProvider>(context, listen: false);
-                              final user = authProvider.user;
+                              final userProfileProvider =
+                                  Provider.of<UserProfileProvider>(context, listen: false);
+                              final user = userProfileProvider.user;
                               
                               if (user == null) {
                                 throw Exception('Kullanıcı bilgisi bulunamadı.');
                               }
 
-                              // Önce AuthProvider'dan classroom bilgisini kontrol et
-                              Classroom? classroom = authProvider.classroom;
+                              // Önce UserProfileProvider'dan classroom bilgisini kontrol et
+                              Classroom? classroom = userProfileProvider.classroom;
 
                               // Eğer classroom yoksa, öğretmenin sınıfını API'den çek
                               if (classroom == null || classroom.id.isEmpty) {
@@ -377,8 +378,8 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final user = authProvider.user;
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final user = userProfileProvider.user;
 
     return Scaffold(
       body: Container(

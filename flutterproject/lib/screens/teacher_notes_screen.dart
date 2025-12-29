@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import '../providers/student_selection_provider.dart';
 import '../services/teacher_note_service.dart';
 import '../models/teacher_note_model.dart';
@@ -57,7 +57,7 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
   }
 
   Future<void> _loadData() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
     final selectedStudent = studentSelectionProvider.selectedStudent;
 
@@ -77,7 +77,7 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
       // Son veli maili ve notları paralel olarak yükle
       final results = await Future.wait([
         _noteService.getLastEmailToParent(selectedStudent.id),
-        _noteService.getStudentNotes(selectedStudent.id, teacherId: authProvider.user?.id),
+        _noteService.getStudentNotes(selectedStudent.id, teacherId: userProfileProvider.user?.id),
       ]);
 
       final emailResult = results[0];
@@ -159,7 +159,7 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
         content: content,
         category: _selectedCategory,
         priority: _selectedPriority,
-        teacherId: Provider.of<AuthProvider>(context, listen: false).user?.id,
+        teacherId: Provider.of<UserProfileProvider>(context, listen: false).user?.id,
       );
 
       if (result['success'] == true) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../providers/statistics_provider.dart';
 import '../services/statistics_service.dart';
@@ -262,7 +262,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildScaffold(BuildContext context, List<SessionActivity> sessionActivities, DateTime? sessionStartTime, Student? selectedStudent) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF6C5CE7),
@@ -393,7 +393,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              authProvider.classroom?.name ?? 'Sınıf',
+                                              userProfileProvider.classroom?.name ?? 'Sınıf',
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 color: Colors.grey[600],

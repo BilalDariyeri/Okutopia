@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
+import 'providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import 'providers/content_provider.dart';
 import 'providers/statistics_provider.dart';
 import 'providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
@@ -33,22 +34,30 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => AuthProvider()), // 🔒 ARCHITECTURE: SharedPreferences artık gerekli değil
+        ChangeNotifierProvider(create: (_) => UserProfileProvider(prefs)), // 🔒 ARCHITECTURE: User profile ayrıldı
         ChangeNotifierProvider(create: (_) => StudentSelectionProvider(prefs)), // 🔒 ARCHITECTURE: Student selection ayrıldı
         ChangeNotifierProvider(create: (_) => ContentProvider()),
         ChangeNotifierProvider(create: (_) => StatisticsProvider()),
       ],
-      child: MaterialApp(
-        title: 'OKUTOPIA',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF4834D4),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        initialRoute: '/login',
+      child: Builder(
+        builder: (context) {
+          // 🔒 ARCHITECTURE: AuthProvider'a UserProfileProvider referansını ver
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+          authProvider.setUserProfileProvider(userProfileProvider);
+          
+          return MaterialApp(
+            title: 'OKUTOPIA',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF4834D4),
+                brightness: Brightness.light,
+              ),
+              useMaterial3: true,
+            ),
+            initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const HomeScreen(),
@@ -66,46 +75,48 @@ class MyApp extends StatelessWidget {
             return GroupsScreen(category: category);
           },
         },
-        onUnknownRoute: (settings) {
-          return MaterialPageRoute(
-            builder: (context) => const LoginScreen(),
-          );
-        },
-        builder: (context, child) {
-          return Consumer<AuthProvider>(
-            builder: (context, authProvider, _) {
-              final route = ModalRoute.of(context);
-              final routeName = route?.settings.name;
+            onUnknownRoute: (settings) {
+              return MaterialPageRoute(
+                builder: (context) => const LoginScreen(),
+              );
+            },
+            builder: (context, child) {
+              return Consumer<AuthProvider>(
+                builder: (context, authProvider, _) {
+                  final route = ModalRoute.of(context);
+                  final routeName = route?.settings.name;
 
-              // Auth durumuna göre yönlendirme
-              if (routeName == '/login' && authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/student-selection');
+                  // Auth durumuna göre yönlendirme
+                  if (routeName == '/login' && authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/student-selection');
+                      }
+                    });
+                    return child ?? const StudentSelectionScreen();
                   }
-                });
-                return child ?? const StudentSelectionScreen();
-              }
 
-              if (routeName == '/home' && !authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
+                  if (routeName == '/home' && !authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/login');
+                      }
+                    });
+                    return child ?? const LoginScreen();
                   }
-                });
-                return child ?? const LoginScreen();
-              }
 
-              if (routeName == '/student-selection' && !authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
+                  if (routeName == '/student-selection' && !authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/login');
+                      }
+                    });
+                    return child ?? const LoginScreen();
                   }
-                });
-                return child ?? const LoginScreen();
-              }
 
-              return child ?? const SizedBox();
+                  return child ?? const SizedBox();
+                },
+              );
             },
           );
         },

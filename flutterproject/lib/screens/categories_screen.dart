@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../providers/content_provider.dart';
 import '../widgets/activity_timer.dart';
@@ -610,15 +611,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              authProvider.classroom?.name ?? 'Sınıf',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
+                            Consumer<UserProfileProvider>(
+                              builder: (context, userProfileProvider, _) => Text(
+                                userProfileProvider.classroom?.name ?? 'Sınıf',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

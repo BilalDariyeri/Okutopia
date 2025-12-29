@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart'; // 🔒 ARCHITECTURE: User profile ayrıldı
 import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Logout'ta student selection temizlemek için
 import '../models/user_model.dart';
 import '../services/user_service.dart';
@@ -32,9 +33,9 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final user = authProvider.user;
-      final classroom = authProvider.classroom;
+      final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+      final user = userProfileProvider.user;
+      final classroom = userProfileProvider.classroom;
 
       if (user == null) {
         setState(() {
@@ -94,8 +95,8 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final user = authProvider.user;
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final user = userProfileProvider.user;
 
     return WillPopScope(
       onWillPop: () async {
@@ -604,8 +605,8 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
                           });
 
                           try {
-                            final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                            final user = authProvider.user;
+                            final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+                            final user = userProfileProvider.user;
                             
                             if (user == null || user.id.isEmpty) {
                               throw Exception('Kullanıcı bilgisi bulunamadı.');
@@ -758,8 +759,8 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.user;
+    final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+    final user = userProfileProvider.user;
     if (user != null) {
       _firstNameController.text = user.firstName;
       _lastNameController.text = user.lastName;
@@ -783,8 +784,8 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final user = authProvider.user;
+      final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+      final user = userProfileProvider.user;
       
       if (user == null || user.id.isEmpty) {
         throw Exception('Kullanıcı bilgisi bulunamadı.');
@@ -797,10 +798,10 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
       );
 
       if (result['success'] == true) {
-        // AuthProvider'ı güncelle
+        // UserProfileProvider'ı güncelle
         final updatedUserData = result['user'] as Map<String, dynamic>;
         final updatedUser = User.fromJson(updatedUserData);
-        authProvider.updateUser(updatedUser);
+        await userProfileProvider.updateUser(updatedUser);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -834,8 +835,8 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final user = authProvider.user;
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final user = userProfileProvider.user;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
