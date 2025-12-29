@@ -973,7 +973,7 @@ ${activitiesListText}
         logger.info('Oturum bazlı istatistik email gönderildi ve lastSessionStats güncellendi', {
             studentId: studentId,
             parentEmail: emailToSend,
-            activityCount: activities.length,
+            activityCount: completedActivities.length,
             totalDuration: totalDuration
         });
 

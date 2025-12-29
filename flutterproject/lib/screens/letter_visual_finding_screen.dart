@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
 class GroupedQuestion {
