@@ -5,14 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:provider/provider.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
-import '../services/statistics_service.dart';
 import '../services/current_session_service.dart';
-import '../providers/auth_provider.dart';
-import '../providers/statistics_provider.dart';
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
 class GroupedQuestion {
@@ -47,9 +43,8 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
   int? _selectedIndex;
   bool _showCongratulations = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final StatisticsService _statisticsService = StatisticsService();
   final CurrentSessionService _sessionService = CurrentSessionService();
-  bool _isSendingEmail = false; // Mail gönderme durumu
+  DateTime? _activityStartTime;
   
   // Gruplanmış sorular (her sayfa için 3 resim)
   List<GroupedQuestion>? _groupedQuestions;
@@ -64,6 +59,7 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
   @override
   void initState() {
     super.initState();
+    _activityStartTime = DateTime.now();
     
     // Soruları grupla (her sayfa için 3 resim)
     _groupQuestions();
@@ -492,8 +488,27 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       // Bir sonraki sayfanın resimlerini önceden yükle (doğru cevap verildiğinde)
       _preloadNextPageImages(_currentPage);
       
-      // Son sayfadaysa tebrik ekranını göster
+      // Son sayfadaysa tebrik ekranını göster ve aktiviteyi kaydet
       if (_groupedQuestions != null && _currentPage == _groupedQuestions!.length - 1) {
+        // Aktiviteyi oturum servisine ekle (TAMAMLANMIŞ olarak işaretle)
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final selectedStudent = authProvider.selectedStudent;
+        
+        if (selectedStudent != null && _activityStartTime != null) {
+          final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+          final correctCount = _groupedQuestions!.length; // Tüm sayfalar doğru cevaplandı
+          
+          _sessionService.addActivity(
+            studentId: selectedStudent.id,
+            activityId: widget.activity.id,
+            activityTitle: widget.activity.title,
+            durationSeconds: duration,
+            successStatus: '$correctCount/${_groupedQuestions!.length} sayfa tamamlandı',
+            isCompleted: true, // Aktivite başarıyla tamamlandı
+            correctAnswerCount: correctCount, // Doğru cevap sayısı
+          );
+        }
+        
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
             setState(() {
@@ -597,111 +612,11 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
   }
 
   /// Etkinlik tamamlandığında mail gönder
-  Future<void> _sendCompletionEmail() async {
-    if (!mounted) return;
-    
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
-    
-    if (selectedStudent == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lütfen önce bir öğrenci seçin.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSendingEmail = true;
-    });
-
-    try {
-      // Öğrenci bilgilerini al (parent email için)
-      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
-      final parentEmail = stats['student']?['parentEmail']?.toString();
-      
-      if (parentEmail == null || parentEmail.isEmpty) {
-        throw Exception('Veli e-posta adresi bulunamadı. Lütfen öğrenci bilgilerini kontrol edin.');
-      }
-
-      // Provider'dan oturum verilerini al
-      final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
-      final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
-
-      // SADECE tamamlanmış aktiviteleri filtrele
-      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
-      
-      if (completedActivities.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        setState(() {
-          _isSendingEmail = false;
-        });
-        return;
-      }
-      
-      final sessionActivitiesData = completedActivities.map((activity) {
-        return {
-          'activityId': activity.activityId,
-          'activityTitle': activity.activityTitle,
-          'durationSeconds': activity.durationSeconds,
-          'successStatus': activity.successStatus,
-          'completedAt': activity.completedAt.toIso8601String(),
-          'isCompleted': activity.isCompleted,
-          'correctAnswerCount': activity.correctAnswerCount,
-        };
-      }).toList();
-
-      // Backend'e oturum bazlı email gönder
-      final result = await _statisticsService.sendSessionEmailToParent(
-        selectedStudent.id,
-        parentEmail: parentEmail,
-        sessionActivities: sessionActivitiesData,
-        totalDurationSeconds: sessionTotalDuration.inSeconds,
-      );
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Rapor başarıyla gönderildi!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        // İstatistikleri yenile
-        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
-        
-        // Ekranı kapat ve geri git
-        Navigator.of(context).pop();
-      } else {
-        throw Exception(result['message'] ?? 'Email gönderilemedi.');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: ${e.toString().replaceAll('Exception: ', '')}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSendingEmail = false;
-        });
-      }
-    }
+  /// Etkinlik tamamlandığında dialog'u kapat (aktivite zaten oturum servisine kaydedildi)
+  void _onCompleted() {
+    // Aktivite zaten oturum servisine kaydedildi (_showCongratulations gösterilmeden önce)
+    // Sadece dialog'u kapat ve geri git
+    Navigator.of(context).pop();
   }
 
   String _getTargetLetter() {
@@ -1305,9 +1220,9 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Tamamlandı Butonu (Mail Gönder)
+                          // Tamamlandı Butonu (Sadece kaydet, mail gönderme)
                           ElevatedButton(
-                            onPressed: _isSendingEmail ? null : _sendCompletionEmail,
+                            onPressed: _onCompleted,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF2196F3),
                               foregroundColor: Colors.white,
@@ -1316,19 +1231,10 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                                 borderRadius: BorderRadius.circular(25),
                               ),
                             ),
-                            child: _isSendingEmail
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Tamamlandı',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
+                            child: const Text(
+                              'Tamamlandı',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
                           ),
                           const SizedBox(width: 20),
                           // Tekrar Oyna Butonu

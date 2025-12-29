@@ -8,9 +8,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
-import '../services/statistics_service.dart';
 import '../providers/auth_provider.dart';
-import '../providers/statistics_provider.dart';
 import '../widgets/activity_timer.dart';
 import '../utils/app_logger.dart';
 import 'letter_find_screen.dart';
@@ -50,10 +48,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
   bool _introAudioPlaying = false;
   StreamSubscription? _playerCompleteSubscription;
   final CurrentSessionService _sessionService = CurrentSessionService();
-  final StatisticsService _statisticsService = StatisticsService();
   DateTime? _activityStartTime;
   Duration _totalSessionDuration = Duration.zero; // Toplam oturum süresi
-  bool _isSendingEmail = false; // Mail gönderme durumu
   
   // Animasyon controller'ları
   late AnimationController _starController;
@@ -443,9 +439,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                       ),
                     ),
                   ),
-                  // Tamamlandı Butonu (Mail Gönder)
+                  // Tamamlandı Butonu (Sadece kaydet, mail gönderme)
                   ElevatedButton(
-                    onPressed: _isSendingEmail ? null : _sendCompletionEmail,
+                    onPressed: _onCompleted,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2196F3),
                       padding: const EdgeInsets.symmetric(
@@ -456,23 +452,14 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                         borderRadius: BorderRadius.circular(25),
                       ),
                     ),
-                    child: _isSendingEmail
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Tamamlandı',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    child: const Text(
+                      'Tamamlandı',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   // Yeniden Başla Butonu
                   ElevatedButton(
@@ -508,111 +495,12 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     );
   }
 
-  /// Etkinlik tamamlandığında mail gönder
-  Future<void> _sendCompletionEmail() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
-    
-    if (selectedStudent == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lütfen önce bir öğrenci seçin.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSendingEmail = true;
-    });
-
-    try {
-      // Öğrenci bilgilerini al (parent email için)
-      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
-      final parentEmail = stats['student']?['parentEmail']?.toString();
-      
-      if (parentEmail == null || parentEmail.isEmpty) {
-        throw Exception('Veli e-posta adresi bulunamadı. Lütfen öğrenci bilgilerini kontrol edin.');
-      }
-
-      // Provider'dan oturum verilerini al
-      final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
-      final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
-
-      // SADECE tamamlanmış aktiviteleri filtrele
-      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
-      
-      if (completedActivities.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        setState(() {
-          _isSendingEmail = false;
-        });
-        return;
-      }
-      
-      final sessionActivitiesData = completedActivities.map((activity) {
-        return {
-          'activityId': activity.activityId,
-          'activityTitle': activity.activityTitle,
-          'durationSeconds': activity.durationSeconds,
-          'successStatus': activity.successStatus,
-          'completedAt': activity.completedAt.toIso8601String(),
-          'isCompleted': activity.isCompleted,
-          'correctAnswerCount': activity.correctAnswerCount,
-        };
-      }).toList();
-
-      // Backend'e oturum bazlı email gönder
-      final result = await _statisticsService.sendSessionEmailToParent(
-        selectedStudent.id,
-        parentEmail: parentEmail,
-        sessionActivities: sessionActivitiesData,
-        totalDurationSeconds: sessionTotalDuration.inSeconds,
-      );
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Rapor başarıyla gönderildi!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        // İstatistikleri yenile
-        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
-        
-        // Dialog'u kapat ve geri git
-        Navigator.of(context).pop(); // Dialog'u kapat
-        Navigator.of(context).pop(); // Soru ekranından çık
-      } else {
-        throw Exception(result['message'] ?? 'Email gönderilemedi.');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: ${e.toString().replaceAll('Exception: ', '')}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSendingEmail = false;
-        });
-      }
-    }
+  /// Etkinlik tamamlandığında dialog'u kapat (aktivite zaten oturum servisine kaydedildi)
+  void _onCompleted() {
+    // Aktivite zaten oturum servisine kaydedildi (_showCompletionDialog çağrılmadan önce)
+    // Sadece dialog'u kapat ve geri git
+    Navigator.of(context).pop(); // Dialog'u kapat
+    Navigator.of(context).pop(); // Soru ekranından çık
   }
 
   String _getQuestionText(MiniQuestion question) {
