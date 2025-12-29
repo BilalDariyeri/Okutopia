@@ -4,6 +4,14 @@ import '../services/content_service.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import 'question_detail_screen.dart';
+import 'letter_find_screen.dart';
+import 'letter_writing_screen.dart';
+import 'letter_c_writing_screen.dart';
+import 'letter_drawing_screen.dart';
+import 'letter_c_drawing_screen.dart';
+import 'letter_dotted_screen.dart';
+import 'letter_c_dotted_screen.dart';
+import 'letter_writing_board_screen.dart';
 import 'letter_visual_finding_screen.dart';
 
 class QuestionsScreen extends StatefulWidget {
@@ -137,13 +145,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     }
   }
 
-<<<<<<< HEAD
   bool _isWritingBoardQuestion(MiniQuestion question) {
-    final questionType = question.questionType?.toString().toUpperCase() ?? '';
-    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
-    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
-    final questionText = question.data?['questionText']?.toString().toUpperCase() ?? '';
+    final questionType = question.questionType.toUpperCase();
+    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
+    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
+    final questionText = (question.data?['questionText'] ?? '').toString().toUpperCase();
     
     return questionFormat == 'YAZI_TAHTASI' ||
         questionType == 'YAZI_TAHTASI' ||
@@ -159,12 +166,36 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         activityTitle.contains('YAZI TAHTA');
   }
 
+  bool _isLetterCDottedQuestion(MiniQuestion question) {
+    final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
+    final questionTextUpper = questionText.toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
+    
+    // "C harfi noktalı çizim" sorusunu tespit et
+    return questionTextUpper.contains('C HARFİ NOKTALI ÇİZİM') ||
+           questionTextUpper.contains('C HARFI NOKTALI ÇİZİM') ||
+           questionTextUpper.contains('C HARFİ NOKTALI ÇİZ') ||
+           questionTextUpper.contains('C HARFI NOKTALI ÇİZ') ||
+           questionTextUpper.contains('C HARFİ NOKTALI') ||
+           questionTextUpper.contains('C HARFI NOKTALI') ||
+           questionTextUpper.contains('C NOKTALI ÇİZİM') ||
+           questionTextUpper.contains('C NOKTALI ÇIZIM') ||
+           (activityTitle.contains('C') && questionTextUpper.contains('NOKTALI ÇİZİM')) ||
+           (activityTitle.contains('C') && questionTextUpper.contains('NOKTALI ÇIZIM')) ||
+           (activityTitle.contains('C C') && questionTextUpper.contains('NOKTALI'));
+  }
+
   bool _isLetterDottedQuestion(MiniQuestion question) {
-    final questionType = question.questionType?.toString().toUpperCase() ?? '';
-    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
-    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
-    final questionText = question.data?['questionText']?.toString().toUpperCase() ?? '';
+    // Önce C harfi noktalı çizim kontrolü yap
+    if (_isLetterCDottedQuestion(question)) {
+      return false;
+    }
+    
+    final questionType = question.questionType.toUpperCase();
+    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
+    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
+    final questionText = (question.data?['questionText'] ?? '').toString().toUpperCase();
     
     return questionFormat == 'NOKTALI_YAZIM' ||
         questionType == 'NOKTALI_YAZIM' ||
@@ -184,10 +215,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   }
 
   bool _isLetterDrawingQuestion(MiniQuestion question) {
-    final questionType = question.questionType?.toString().toUpperCase() ?? '';
-    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
-    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
+    // Önce C harfi serbest çizim kontrolü yapılıyor mu kontrol et
+    // Eğer C harfi serbest çizim ise, bu fonksiyon false döndürmeli
+    if (_isLetterCDrawingQuestion(question)) {
+      return false;
+    }
+    
+    final questionType = question.questionType.toUpperCase();
+    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
+    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
     
     // Soru metnini al
     final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
@@ -212,11 +249,40 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         activityTitle.contains('SERBEST');
   }
 
+  bool _isLetterCDrawingQuestion(MiniQuestion question) {
+    final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
+    final questionTextUpper = questionText.toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
+    
+    // Debug: Soru metnini yazdır
+    print('🔍 C Harfi Serbest Çizim Kontrolü:');
+    print('   Soru Metni: $questionText');
+    print('   Aktivite Başlığı: ${widget.activity.title}');
+    
+    // "C harfi serbest çizim" sorusunu tespit et
+    // Hem soru metninde hem de aktivite başlığında kontrol et
+    final isCDrawing = questionTextUpper.contains('C HARFİ SERBEST ÇİZİM') ||
+           questionTextUpper.contains('C HARFI SERBEST ÇİZİM') ||
+           questionTextUpper.contains('C HARFİ SERBEST ÇİZ') ||
+           questionTextUpper.contains('C HARFI SERBEST ÇİZ') ||
+           questionTextUpper.contains('C HARFİ SERBEST') ||
+           questionTextUpper.contains('C HARFI SERBEST') ||
+           questionTextUpper.contains('C SERBEST ÇİZİM') ||
+           questionTextUpper.contains('C SERBEST ÇIZIM') ||
+           (activityTitle.contains('C') && questionTextUpper.contains('SERBEST ÇİZİM')) ||
+           (activityTitle.contains('C') && questionTextUpper.contains('SERBEST ÇIZIM')) ||
+           (activityTitle.contains('C C') && questionTextUpper.contains('SERBEST'));
+    
+    print('   Sonuç: $isCDrawing');
+    
+    return isCDrawing;
+  }
+
   bool _isLetterWritingQuestion(MiniQuestion question) {
-    final questionType = question.questionType?.toString().toUpperCase() ?? '';
-    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
-    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
+    final questionType = question.questionType.toUpperCase();
+    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
+    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
     
     // Soru metnini al
     final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
@@ -242,11 +308,22 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         (activityTitle.contains('HARF') && (activityTitle.contains('YAZIM') || activityTitle.contains('YAZILIR') || activityTitle.contains('YAZ')));
   }
 
+  bool _isLetterCWritingQuestion(MiniQuestion question) {
+    final questionText = question.data?['questionText'] ?? question.data?['text'] ?? '';
+    final questionTextUpper = questionText.toString().toUpperCase();
+    
+    // "C harfi nasıl yazılır" sorusunu tespit et
+    return questionTextUpper.contains('C HARFİ NASIL YAZILIR') ||
+           questionTextUpper.contains('C HARFI NASIL YAZILIR') ||
+           questionTextUpper.contains('C HARFİ NASIL YAZ') ||
+           questionTextUpper.contains('C HARFI NASIL YAZ');
+  }
+
   bool _isLetterFindQuestion(MiniQuestion question) {
-    final questionType = question.questionType?.toString().toUpperCase() ?? '';
-    final questionFormat = question.questionFormat?.toString().toUpperCase() ?? '';
-    final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title.toString().toUpperCase() ?? '';
+    final questionType = question.questionType.toUpperCase();
+    final questionFormat = (question.questionFormat ?? '').toString().toUpperCase();
+    final adminNote = (question.data?['adminNote'] ?? '').toString().toUpperCase();
+    final activityTitle = widget.activity.title.toUpperCase();
     
     // contentObject'te words array'i var mı kontrol et
     final contentObject = question.data?['contentObject'];
@@ -305,9 +382,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       itemBuilder: (context, index) {
         final question = _questions[index];
         final isWritingBoard = _isWritingBoardQuestion(question);
+        final isLetterCDotted = _isLetterCDottedQuestion(question);
         final isLetterDotted = _isLetterDottedQuestion(question);
         final isLetterDrawing = _isLetterDrawingQuestion(question);
+        final isLetterCDrawing = _isLetterCDrawingQuestion(question);
         final isLetterWriting = _isLetterWritingQuestion(question);
+        final isLetterCWriting = _isLetterCWritingQuestion(question);
         final isLetterFind = _isLetterFindQuestion(question);
         final questionTitle = _getQuestionTitle(question);
         
@@ -413,10 +493,32 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                     ),
                   ),
                 );
+              } else if (isLetterCDotted) {
+                // LetterCDottedScreen'e git (C harfi için özel ekran)
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => LetterCDottedScreen(
+                      activity: widget.activity,
+                      questions: _questions,
+                      currentQuestionIndex: index,
+                    ),
+                  ),
+                );
               } else if (isLetterDotted) {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => LetterDottedScreen(
+                      activity: widget.activity,
+                      questions: _questions,
+                      currentQuestionIndex: index,
+                    ),
+                  ),
+                );
+              } else if (isLetterCDrawing) {
+                // LetterCDrawingScreen'e git (C harfi için özel ekran)
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => LetterCDrawingScreen(
                       activity: widget.activity,
                       questions: _questions,
                       currentQuestionIndex: index,
@@ -428,6 +530,17 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => LetterDrawingScreen(
+                      activity: widget.activity,
+                      questions: _questions,
+                      currentQuestionIndex: index,
+                    ),
+                  ),
+                );
+              } else if (isLetterCWriting) {
+                // LetterCWritingScreen'e git (C harfi için özel ekran)
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => LetterCWritingScreen(
                       activity: widget.activity,
                       questions: _questions,
                       currentQuestionIndex: index,
@@ -559,11 +672,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   activity: widget.activity,
                   questions: _questions,
                 )
-              : QuestionDetailScreen(
-                  activity: widget.activity,
-                  questions: _questions,
-                  currentQuestionIndex: 0,
-                ),
+              : _buildQuestionsList(),
     );
   }
 }
