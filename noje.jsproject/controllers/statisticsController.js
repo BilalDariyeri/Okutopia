@@ -801,7 +801,14 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             // isCompleted === true olan aktiviteleri al (varsayılan olarak true kabul et)
             return activity.isCompleted !== false; // undefined veya true ise dahil et
         });
-        const totalDuration = totalDurationSeconds || 0;
+        
+        // Toplam süreyi aktivitelerin sürelerinden hesapla (aktivite sürelerinin toplamı)
+        const calculatedTotalDuration = completedActivities.reduce((sum, activity) => {
+            return sum + (activity.durationSeconds || 0);
+        }, 0);
+        
+        // Frontend'den gelen totalDurationSeconds'i kullan, ama eğer aktivitelerin toplamı daha büyükse onu kullan
+        const totalDuration = Math.max(calculatedTotalDuration, totalDurationSeconds || 0);
 
         if (completedActivities.length === 0) {
             return res.status(400).json({
@@ -986,7 +993,14 @@ ${activitiesListText}
         logger.error('Oturum bazlı email gönderme hatası', {
             studentId: studentId,
             error: error.message,
-            stack: error.stack
+            stack: error.stack,
+            errorCode: error.code,
+            errorResponse: error.response,
+            requestBody: {
+                parentEmail: req.body.parentEmail,
+                sessionActivitiesCount: req.body.sessionActivities?.length || 0,
+                totalDurationSeconds: req.body.totalDurationSeconds
+            }
         });
         
         let errorMessage = 'Email gönderilemedi.';
@@ -998,6 +1012,12 @@ ${activitiesListText}
         } else if (error.message && error.message.includes('kimlik doğrulama')) {
             errorMessage = 'Email kimlik doğrulama hatası. Gmail için App Password kullanılmalıdır.';
             statusCode = 500;
+        } else if (error.code === 'EAUTH') {
+            errorMessage = 'Email kimlik doğrulama hatası. EMAIL_USER ve EMAIL_PASS bilgilerini kontrol edin.';
+            statusCode = 500;
+        } else if (error.code === 'ECONNECTION') {
+            errorMessage = 'Email sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+            statusCode = 500;
         } else {
             errorMessage = error.message || 'Email gönderilemedi.';
             statusCode = 500;
@@ -1006,7 +1026,8 @@ ${activitiesListText}
         res.status(statusCode).json({
             success: false,
             message: errorMessage,
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Email gönderme hatası'
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Email gönderme hatası',
+            errorCode: error.code || 'UNKNOWN_ERROR'
         });
     }
 };
