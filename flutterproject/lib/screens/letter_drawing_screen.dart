@@ -10,6 +10,7 @@ import '../config/api_config.dart';
 import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
 import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
 
 class LetterDrawingScreen extends StatefulWidget {
   final Activity activity;
@@ -167,13 +168,15 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
         successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
       );
       
-      // Oturum servisine de ekle
+      // Oturum servisine de ekle (TAMAMLANMIŞ olarak işaretle)
       _sessionService.addActivity(
         studentId: studentId,
         activityId: widget.activity.id,
         activityTitle: widget.activity.title,
         durationSeconds: duration,
         successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
+        isCompleted: true, // Aktivite başarıyla tamamlandı
+        correctAnswerCount: 0, // Bu aktivite tipinde doğru cevap sayısı yok
       );
     }
   }
@@ -240,7 +243,7 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      AppLogger.error('Ses çalınamadı', e);
     }
   }
 

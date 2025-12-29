@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../services/content_service.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/content_provider.dart';
+import '../widgets/activity_timer.dart';
+import '../services/current_session_service.dart';
 import 'groups_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -16,19 +18,11 @@ class CategoriesScreen extends StatefulWidget {
 }
 
 class _CategoriesScreenState extends State<CategoriesScreen> with TickerProviderStateMixin {
-  final ContentService _contentService = ContentService();
   final StatisticsService _statisticsService = StatisticsService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
   final ScrollController _scrollController = ScrollController();
-  List<Category> _categories = [];
-  bool _isLoading = true;
   String? _errorMessage;
   
-  // Süre takibi
-  bool _isTimerRunning = true;
-  DateTime? _sessionStartTime;
-  Duration _sessionDuration = Duration.zero;
-  Duration _todayDuration = Duration.zero;
-  Timer? _timer;
 
   // Renk paleti (görseldeki renklere göre)
   final List<Color> _categoryColors = [
@@ -78,13 +72,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
       vsync: this,
     )..repeat();
     
-    _loadCategories();
     _initializeSession();
+    // Cache-first: Provider'dan kategorileri yükle (anında gösterir)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategoriesFromProvider();
+    });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _scrollController.dispose();
     _planet1Controller.dispose();
     _planet2Controller.dispose();
@@ -106,54 +102,34 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
       final result = await _statisticsService.startSession(selectedStudent.id);
       if (!mounted) return;
       if (result['success'] == true && result['session'] != null) {
-        setState(() {
-          _sessionStartTime = DateTime.parse(result['session']['startTime']);
-          _sessionDuration = Duration.zero;
-        });
-        
         // İstatistikleri yükle (bugünkü süre için)
         await _loadStatistics(selectedStudent.id);
-        
-        // Timer başlat
-        _startTimer();
       }
     } catch (e) {
       debugPrint('Oturum başlatma hatası: $e');
-      // Hata olsa bile timer'ı başlat (local tracking)
-      _sessionStartTime = DateTime.now();
-      _startTimer();
     }
   }
 
   Future<void> _loadStatistics(String studentId) async {
     try {
-      final stats = await _statisticsService.getStudentStatistics(studentId);
+      await _statisticsService.getStudentStatistics(studentId);
       if (!mounted) return;
-      if (stats['success'] == true && stats['dailyStats'] != null) {
-        final dailyStats = stats['dailyStats'];
-        final totalTime = dailyStats['totalTimeSpent'] ?? 0;
-        setState(() {
-          _todayDuration = Duration(seconds: totalTime);
-        });
-      }
+      // İstatistikler yüklendi, ActivityTimer otomatik başlayacak
     } catch (e) {
       debugPrint('İstatistik yükleme hatası: $e');
     }
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_isTimerRunning && _sessionStartTime != null) {
-        setState(() {
-          _sessionDuration = DateTime.now().difference(_sessionStartTime!);
-        });
-      }
-    });
+  // ActivityTimer callback - süre güncellendiğinde çağrılır
+  void _onTimerUpdate(Duration duration, bool isRunning) {
+    if (!mounted) return;
+    
+    // CurrentSessionService'e güncelle
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    if (selectedStudent != null) {
+      _sessionService.updateSessionTotalDuration(selectedStudent.id, duration);
+    }
   }
 
   Future<void> _endSessionOnDispose() async {
@@ -170,36 +146,43 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     }
   }
 
-  Future<void> _loadCategories() async {
+  /// Cache-First: Provider'dan kategorileri yükle (Zero-Loading UI)
+  Future<void> _loadCategoriesFromProvider() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final response = await _contentService.getAllCategories();
-      if (!mounted) return;
-
+    
+    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+    
+    // Provider'dan cache'lenmiş veriyi kontrol et
+    if (contentProvider.categories != null && contentProvider.categories!.isNotEmpty) {
+      // Cache'de veri var, anında göster (loading yok!)
       setState(() {
-        _categories = response.categories;
-        _isLoading = false;
+        _errorMessage = null;
+      });
+      // Arka planda refresh yapılacak (Provider içinde)
+      return;
+    }
+    
+    // Cache yoksa yükle (ilk açılış)
+    try {
+      await contentProvider.loadCategories();
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
+      String errorMsg = e.toString().replaceAll('Exception: ', '');
+      if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
+        errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
+      } else if (errorMsg.contains('401') || errorMsg.contains('Token')) {
+        errorMsg = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
+      } else if (errorMsg.contains('403')) {
+        errorMsg = 'Bu işlem için yetkiniz bulunmamaktadır.';
+      } else if (errorMsg.contains('404')) {
+        errorMsg = 'Kategoriler bulunamadı.';
+      }
       setState(() {
-        String errorMsg = e.toString().replaceAll('Exception: ', '');
-        if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
-          errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
-        } else if (errorMsg.contains('401') || errorMsg.contains('Token')) {
-          errorMsg = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
-        } else if (errorMsg.contains('403')) {
-          errorMsg = 'Bu işlem için yetkiniz bulunmamaktadır.';
-        } else if (errorMsg.contains('404')) {
-          errorMsg = 'Kategoriler bulunamadı.';
-        }
         _errorMessage = errorMsg;
-        _isLoading = false;
       });
     }
   }
@@ -210,8 +193,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false); // listen: false - gereksiz rebuild'i önle
+    final contentProvider = Provider.of<ContentProvider>(context);
     final selectedStudent = authProvider.selectedStudent;
+    
+    // Cache-First: Provider'dan kategorileri al (anında gösterilir)
+    final categories = contentProvider.categories ?? [];
 
     return Scaffold(
       body: Stack(
@@ -238,13 +225,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           ),
           // Ana içerik
           SafeArea(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : _errorMessage != null
+            child: _errorMessage != null
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -265,7 +246,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                             ),
                             const SizedBox(height: 24),
                             ElevatedButton(
-                              onPressed: _loadCategories,
+                              onPressed: _loadCategoriesFromProvider,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 foregroundColor: const Color(0xFF4834D4),
@@ -290,11 +271,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                               background: _buildTopHeader(selectedStudent, authProvider),
                             ),
                           ),
-                          // Ana içerik
+                          // Ana içerik - Cache-First: Anında gösterilir
                           SliverPadding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                            sliver: _categories.isEmpty
-                                ? SliverToBoxAdapter(child: _buildEmptyState())
+                            sliver: categories.isEmpty
+                                ? SliverToBoxAdapter(
+                                    child: contentProvider.isRefreshingCategories
+                                        ? _buildSkeletonLoading()
+                                        : _buildEmptyState(),
+                                  )
                                 : SliverGrid(
                                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 3, // 3 sütun (web sitesindeki gibi)
@@ -304,9 +289,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                                     ),
                                     delegate: SliverChildBuilderDelegate(
                                       (context, index) {
-                                        return _buildCategoryCard(_categories[index], index);
+                                        return _buildCategoryCard(categories[index], index);
                                       },
-                                      childCount: _categories.length,
+                                      childCount: categories.length,
                                     ),
                                   ),
                           ),
@@ -603,6 +588,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               selectedStudent.fullName,
@@ -611,24 +597,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             Text(
                               authProvider.classroom?.name ?? 'Sınıf',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.8),
+                                color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Yaş: --',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -637,189 +618,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                   ),
                 ),
               const SizedBox(width: 12),
-              // Sağ: Ekran süresi kartı (web sitesindeki gibi)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2C), // Koyu gri
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Ekran Süresi başlığı ve süre
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Ekran Süresi: ',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(_sessionDuration),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Bugün ve Bu Oturum
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Bugün: ',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(_todayDuration),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Bu Oturum: ',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(_sessionDuration),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Durdur/Devam butonu
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            if (!mounted) return;
-                            setState(() {
-                              _isTimerRunning = !_isTimerRunning;
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            minimumSize: Size.zero,
-                            backgroundColor: _isTimerRunning ? Colors.red : Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _isTimerRunning ? Icons.pause : Icons.play_arrow,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _isTimerRunning ? 'Durdur' : 'Devam',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Bitti butonu
-                    TextButton(
-                      onPressed: () async {
-                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                        final selectedStudent = authProvider.selectedStudent;
-                        
-                        if (selectedStudent != null) {
-                          try {
-                            // Oturumu bitir ve istatistiğe kaydet
-                            await _statisticsService.endSession(selectedStudent.id);
-                            
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Oturum kaydedildi.'),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                              
-                              // Öğrenci seçim ekranına dön
-                              Navigator.of(context).pushReplacementNamed('/student-selection');
-                            }
-                          } catch (e) {
-                            debugPrint('Oturum bitirme hatası: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Hata: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          }
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
-                        backgroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 12,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Bitti',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              // ActivityTimer Widget (Çocuklar için büyük ve çekici)
+              ActivityTimer(
+                onTimerUpdate: _onTimerUpdate,
               ),
-              const SizedBox(width: 8),
               // Öğrenci Değiştir butonu
               ElevatedButton.icon(
                 onPressed: () {
@@ -850,12 +652,61 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     );
   }
 
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(duration.inHours);
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$hours:$minutes:$seconds';
+  /// Skeleton Loading (CircularProgressIndicator yerine)
+  Widget _buildSkeletonLoading() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.85,
+        ),
+        itemCount: 6, // 6 skeleton kart göster
+        itemBuilder: (context, index) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: 60,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -1029,7 +880,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // İstatistikler ekranı gelecekte eklenecek
+                Navigator.of(context).pushNamed('/statistics');
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1052,11 +903,38 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
               ),
             ),
           ),
+          // Notlar
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                Navigator.of(context).pushNamed('/teacher-notes');
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.note_outlined,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Notlar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           // Profil
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // Profil ekranı gelecekte eklenecek
+                Navigator.of(context).pushNamed('/teacher-profile');
               },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

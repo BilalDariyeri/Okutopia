@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../utils/app_logger.dart';
 
 class LetterCDottedScreen extends StatefulWidget {
   final Activity activity;
@@ -36,8 +37,8 @@ class _LetterCDottedScreenState extends State<LetterCDottedScreen>
   StreamSubscription? _playerCompleteSubscription;
 
   late AnimationController _arrowAnimationController;
-  List<Offset> _arrowPositions = [];
-  List<double> _arrowRotations = [];
+  final List<Offset> _arrowPositions = [];
+  final List<double> _arrowRotations = [];
   
   // Canvas için GlobalKey
   final GlobalKey _canvasKey = GlobalKey();
@@ -101,7 +102,7 @@ class _LetterCDottedScreenState extends State<LetterCDottedScreen>
       await _audioPlayer.play(UrlSource(url));
       _audioPlayer.setVolume(volume);
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      AppLogger.error('Ses çalınamadı', e);
     }
   }
 
@@ -151,7 +152,7 @@ class _LetterCDottedScreenState extends State<LetterCDottedScreen>
     // Çizim tamamlanma kontrolü
     if (_currentPathPoints.length > 15) {
       final accuracy = _checkAccuracy();
-      print('Doğruluk: $accuracy, Adım: $_currentStep');
+      AppLogger.debug('Doğruluk: $accuracy, Adım: $_currentStep');
       
       if (accuracy > 0.1) {
         // Düzgün C harfi yayını göster
@@ -272,7 +273,7 @@ class _LetterCDottedScreenState extends State<LetterCDottedScreen>
                       child: Column(
                         children: [
                           // Canvas Container
-                          Container(
+                          SizedBox(
                             width: 320,
                             height: 360,
                             child: Stack(

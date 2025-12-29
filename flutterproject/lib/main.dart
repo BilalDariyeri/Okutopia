@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
+import 'providers/content_provider.dart';
+import 'providers/statistics_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/student_selection_screen.dart';
 import 'screens/categories_screen.dart';
 import 'screens/groups_screen.dart';
 import 'screens/statistics_screen.dart';
+import 'screens/teacher_profile_screen.dart';
+import 'screens/teacher_notes_screen.dart';
 import 'models/category_model.dart';
 
 void main() async {
@@ -26,8 +30,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(prefs),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => ContentProvider()),
+        ChangeNotifierProvider(create: (_) => StatisticsProvider()),
+      ],
       child: MaterialApp(
         title: 'OKUTOPIA',
         debugShowCheckedModeBanner: false,
@@ -45,6 +53,8 @@ class MyApp extends StatelessWidget {
           '/student-selection': (context) => const StudentSelectionScreen(),
           '/categories': (context) => const CategoriesScreen(),
           '/statistics': (context) => const StatisticsScreen(),
+          '/teacher-notes': (context) => const TeacherNotesScreen(),
+          '/teacher-profile': (context) => const TeacherProfileScreen(),
           '/groups': (context) {
             final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
             final category = args?['category'] as Category?;

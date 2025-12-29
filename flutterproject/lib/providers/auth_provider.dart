@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_model.dart';
 import '../models/student_model.dart';
 import '../services/auth_service.dart';
+import '../services/token_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -49,7 +50,7 @@ class AuthProvider with ChangeNotifier {
   // Kullanıcı bilgilerini storage'dan yükle
   Future<void> _loadUserFromStorage() async {
     try {
-      _token = await _secureStorage.read(key: 'token');
+      _token = await TokenService.getToken();
       
       // Clear invalid stored data if token is missing
       if (_token == null) {
@@ -116,8 +117,8 @@ class AuthProvider with ChangeNotifier {
         debugPrint('  - Classroom: ${_classroom?.id} - ${_classroom?.name}');
         debugPrint('  - Classroom null mu?: ${_classroom == null}');
 
-        // Token'ı güvenli storage'a kaydet
-        await _secureStorage.write(key: 'token', value: _token);
+        // Token'ı hem cache'e hem güvenli storage'a kaydet
+        await TokenService.cacheToken(_token!);
         
         // Kullanıcı bilgilerini shared preferences'a kaydet
         await _prefs.setString('user', jsonEncode(response.user.toJson()));
@@ -213,6 +214,14 @@ class AuthProvider with ChangeNotifier {
     await _prefs.remove('user');
     await _prefs.remove('selectedStudent');
 
+    notifyListeners();
+  }
+
+  // Kullanıcı bilgilerini güncelle
+  Future<void> updateUser(User updatedUser) async {
+    _user = updatedUser;
+    // Kullanıcı bilgilerini shared preferences'a kaydet
+    await _prefs.setString('user', jsonEncode(updatedUser.toJson()));
     notifyListeners();
   }
 

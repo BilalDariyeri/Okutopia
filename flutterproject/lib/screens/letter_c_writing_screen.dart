@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../utils/app_logger.dart';
 
 class LetterCWritingScreen extends StatefulWidget {
   final Activity activity;
@@ -37,8 +38,8 @@ class _LetterCWritingScreenState extends State<LetterCWritingScreen>
   StreamSubscription? _playerCompleteSubscription;
 
   late AnimationController _arrowAnimationController;
-  List<Offset> _arrowPositions = [];
-  List<double> _arrowRotations = [];
+  final List<Offset> _arrowPositions = [];
+  final List<double> _arrowRotations = [];
   
   // Gezegen animasyonları için controller'lar
   late AnimationController _planet1Controller;
@@ -130,7 +131,7 @@ class _LetterCWritingScreenState extends State<LetterCWritingScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      AppLogger.error('Ses çalınamadı', e);
     }
   }
 
@@ -678,7 +679,6 @@ class LetterCWritingPainter extends CustomPainter {
       final radiusY = arc['radiusY'] as double;
       final startAngle = arc['startAngle'] as double;
       final endAngle = arc['endAngle'] as double;
-      final clockwise = arc['clockwise'] as bool;
       
       final progress = animationProgress.clamp(0.0, 1.0);
       final currentEndAngle = startAngle + (endAngle - startAngle) * progress;

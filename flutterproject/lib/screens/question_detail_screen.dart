@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
-import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
+import '../services/statistics_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/statistics_provider.dart';
+import '../widgets/activity_timer.dart';
 import '../utils/app_logger.dart';
 import 'letter_find_screen.dart';
 import 'letter_writing_screen.dart';
@@ -46,6 +49,11 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
   bool _isPlayingAudio = false;
   bool _introAudioPlaying = false;
   StreamSubscription? _playerCompleteSubscription;
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  final StatisticsService _statisticsService = StatisticsService();
+  DateTime? _activityStartTime;
+  Duration _totalSessionDuration = Duration.zero; // Toplam oturum süresi
+  bool _isSendingEmail = false; // Mail gönderme durumu
   
   // Animasyon controller'ları
   late AnimationController _starController;
@@ -58,30 +66,38 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
   void initState() {
     super.initState();
     _currentIndex = widget.currentQuestionIndex;
+    _activityStartTime = DateTime.now();
+    
+    // Toplam oturum süresini CurrentSessionService'den al
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    if (selectedStudent != null) {
+      _totalSessionDuration = _sessionService.getSessionTotalDuration(selectedStudent.id);
+    }
 
-    // Animasyon controller'ları
+    // Animasyon controller'ları (performans için daha yavaş ve daha az CPU kullanımı)
     _starController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 5), // Daha yavaş
       vsync: this,
     )..repeat(reverse: true);
     
     _planet1Controller = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 20), // Daha yavaş
       vsync: this,
     )..repeat();
     
     _planet2Controller = AnimationController(
-      duration: const Duration(seconds: 10),
+      duration: const Duration(seconds: 25), // Daha yavaş
       vsync: this,
     )..repeat();
     
     _planet3Controller = AnimationController(
-      duration: const Duration(seconds: 12),
+      duration: const Duration(seconds: 30), // Daha yavaş
       vsync: this,
     )..repeat();
     
     _planet4Controller = AnimationController(
-      duration: const Duration(seconds: 6),
+      duration: const Duration(seconds: 15), // Daha yavaş
       vsync: this,
     )..repeat();
     
@@ -102,6 +118,11 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
           _gameStarted = true;
         });
       }
+    });
+    
+    // İlk soru gösterilirken ikinci sorunun resim ve seslerini önceden yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadNextQuestion(_currentIndex);
     });
   }
 
@@ -125,76 +146,40 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     return '$baseUrl/api/files/$fileId';
   }
 
-<<<<<<< HEAD
-  /// Tüm soruların resimlerini önceden yükle (preload)
-  void _preloadAllQuestionImages() {
+  /// Bir sonraki sorunun resmini önceden yükle (sadece resim, ses preload kaldırıldı - performans için)
+  void _preloadNextQuestion(int currentIndex) {
     if (!mounted) return;
     
-    // Tüm soruların resimlerini sırayla preload et
-    for (int i = 0; i < widget.questions.length; i++) {
-      final question = widget.questions[i];
-      final imageFileId = question.mediaFileId;
+    // Bir sonraki soru var mı kontrol et
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= widget.questions.length) return;
+    
+    final nextQuestion = widget.questions[nextIndex];
+    
+    // Sadece resmi önceden yükle (ses preload performans sorununa neden oluyor)
+    final imageFileId = nextQuestion.mediaFileId;
+    if (imageFileId != null && imageFileId.isNotEmpty) {
+      final imageUrl = _getFileUrl(imageFileId);
       
-      if (imageFileId != null && imageFileId.isNotEmpty) {
-        final imageUrl = _getFileUrl(imageFileId);
-        
-        // URL geçerliliğini kontrol et
-        if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
-          continue;
-        }
-        
-        // Resmi önceden cache'e yükle (hata durumunda sessizce devam et)
-        Future.delayed(Duration(milliseconds: i * 100), () async {
+      if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        // Resmi arka planda önceden yükle (daha hafif timeout)
+        Future.delayed(const Duration(milliseconds: 500), () async {
           if (!mounted) return;
           
           try {
+            final imageProvider = CachedNetworkImageProvider(imageUrl);
             await precacheImage(
-              CachedNetworkImageProvider(imageUrl),
+              imageProvider,
               context,
             ).timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 2), // Timeout azaltıldı
               onTimeout: () {
-                AppLogger.debug('Preload timeout (soru ${i + 1})');
+                // Timeout durumunda sessizce devam et
               },
             );
           } catch (e) {
-            // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
-            // Bu normal bir durum olabilir, bu yüzden sadece debug modda loglayalım
-            AppLogger.debug('Preload hatası (soru ${i + 1}): $e');
+            // Hataları sessizce yok say (performans için)
           }
-        });
-      }
-    }
-  }
-
-  /// Bir sonraki sorunun resmini önceden yükle (preload)
-  void _preloadNextQuestionImage() {
-    if (!mounted) return;
-    
-    if (_currentIndex + 1 < widget.questions.length) {
-      final nextQuestion = widget.questions[_currentIndex + 1];
-      final nextImageFileId = nextQuestion.mediaFileId;
-      
-      if (nextImageFileId != null && nextImageFileId.isNotEmpty) {
-        final imageUrl = _getFileUrl(nextImageFileId);
-        
-        // URL geçerliliğini kontrol et
-        if (imageUrl.isEmpty || !imageUrl.startsWith('http')) {
-          return;
-        }
-        
-        // Resmi önceden cache'e yükle (hata durumunda sessizce devam et)
-        precacheImage(
-          CachedNetworkImageProvider(imageUrl),
-          context,
-        ).timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            AppLogger.debug('Preload timeout (sonraki soru)');
-          },
-        ).catchError((error) {
-          // Hata durumunda sessizce devam et (resim bozuk veya erişilemez olabilir)
-          AppLogger.debug('Preload hatası: $error');
         });
       }
     }
@@ -317,9 +302,11 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
           _userAnswer = null;
           _audioPlayed = false;
         });
+        
+        // Bir sonraki sorunun resim ve seslerini önceden yükle (kullanıcı beklemez)
+        _preloadNextQuestion(_currentIndex);
       } else if (mounted) {
-<<<<<<< HEAD
-        // Tüm sorular bitti - aktiviteyi oturum servisine ekle
+        // Tüm sorular bitti - aktiviteyi oturum servisine ekle (TAMAMLANMIŞ olarak işaretle)
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         final selectedStudent = authProvider.selectedStudent;
         
@@ -328,12 +315,15 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
           final successRate = (_score / widget.questions.length * 100).round();
           final successStatus = '$_score/${widget.questions.length} soru doğru (%$successRate)';
           
+          // Aktivite başarıyla tamamlandı - isCompleted = true
           _sessionService.addActivity(
             studentId: selectedStudent.id,
             activityId: widget.activity.id,
             activityTitle: widget.activity.title,
             durationSeconds: duration,
             successStatus: successStatus,
+            isCompleted: true, // Aktivite başarıyla tamamlandı
+            correctAnswerCount: _score, // Doğru cevap sayısı
           );
         }
         
@@ -348,16 +338,15 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
       context: context,
       barrierDismissible: false,
       builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Container(
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.2),
-              width: 1,
-            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -374,18 +363,19 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
               const Text(
                 'Etkinliği tamamladın!',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: Color(0xFF2D3436),
                   fontSize: 20,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 30),
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3).withValues(alpha: 0.2),
+                  color: const Color(0xFF2196F3).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(
-                    color: const Color(0xFF2196F3).withValues(alpha: 0.5),
+                    color: const Color(0xFF2196F3).withOpacity(0.3),
                     width: 2,
                   ),
                 ),
@@ -394,7 +384,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                     Text(
                       'Toplam Puan: $_score/${widget.questions.length}',
                       style: const TextStyle(
-                        color: Color(0xFF87CEEB),
+                        color: Color(0xFF2196F3),
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
@@ -408,6 +398,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                           style: const TextStyle(
                             color: Color(0xFF4CAF50),
                             fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -415,6 +406,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                           style: const TextStyle(
                             color: Color(0xFFF44336),
                             fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -423,35 +415,204 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                 ),
               ),
               const SizedBox(height: 30),
-              ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Dialog'u kapat
-              Navigator.of(context).pop(); // Soru ekranından çık
-            },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 30,
-                    vertical: 15,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Geri Git Butonu
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Dialog'u kapat
+                      Navigator.of(context).pop(); // Soru ekranından çık
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[600],
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text(
+                      'Geri Git',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+                  // Tamamlandı Butonu (Mail Gönder)
+                  ElevatedButton(
+                    onPressed: _isSendingEmail ? null : _sendCompletionEmail,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2196F3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: _isSendingEmail
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Tamamlandı',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
-                ),
-                child: const Text(
-                  'Yeniden Başla',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                  // Yeniden Başla Butonu
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Dialog'u kapat
+                      Navigator.of(context).pop(); // Soru ekranından çık
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text(
+                      'Yeniden Başla',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-          ),
-        ],
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  /// Etkinlik tamamlandığında mail gönder
+  Future<void> _sendCompletionEmail() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lütfen önce bir öğrenci seçin.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSendingEmail = true;
+    });
+
+    try {
+      // Öğrenci bilgilerini al (parent email için)
+      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
+      final parentEmail = stats['student']?['parentEmail']?.toString();
+      
+      if (parentEmail == null || parentEmail.isEmpty) {
+        throw Exception('Veli e-posta adresi bulunamadı. Lütfen öğrenci bilgilerini kontrol edin.');
+      }
+
+      // Provider'dan oturum verilerini al
+      final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
+      final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
+
+      // SADECE tamamlanmış aktiviteleri filtrele
+      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
+      
+      if (completedActivities.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSendingEmail = false;
+        });
+        return;
+      }
+      
+      final sessionActivitiesData = completedActivities.map((activity) {
+        return {
+          'activityId': activity.activityId,
+          'activityTitle': activity.activityTitle,
+          'durationSeconds': activity.durationSeconds,
+          'successStatus': activity.successStatus,
+          'completedAt': activity.completedAt.toIso8601String(),
+          'isCompleted': activity.isCompleted,
+          'correctAnswerCount': activity.correctAnswerCount,
+        };
+      }).toList();
+
+      // Backend'e oturum bazlı email gönder
+      final result = await _statisticsService.sendSessionEmailToParent(
+        selectedStudent.id,
+        parentEmail: parentEmail,
+        sessionActivities: sessionActivitiesData,
+        totalDurationSeconds: sessionTotalDuration.inSeconds,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rapor başarıyla gönderildi!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // İstatistikleri yenile
+        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
+        
+        // Dialog'u kapat ve geri git
+        Navigator.of(context).pop(); // Dialog'u kapat
+        Navigator.of(context).pop(); // Soru ekranından çık
+      } else {
+        throw Exception(result['message'] ?? 'Email gönderilemedi.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Hata: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingEmail = false;
+        });
+      }
+    }
   }
 
   String _getQuestionText(MiniQuestion question) {
@@ -484,6 +645,14 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     
     // Varsayılan açıklama
     return 'Önce "Sesi Hisset" butonuna tıkla, sonra kelime içinde "a" harfi varsa tik (✓), yoksa çarpı (✗) butonuna tıkla!';
+  }
+
+  // ActivityTimer callback - Toplam süreyi güncelle
+  void _onTotalTimerUpdate(Duration duration, bool isRunning) {
+    if (!mounted) return;
+    setState(() {
+      _totalSessionDuration = duration;
+    });
   }
 
   Widget _buildSpaceBackground() {
@@ -610,8 +779,6 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     }
 
     final question = widget.questions[_currentIndex];
-<<<<<<< HEAD
-    
     
     // Debug: Soru tipini kontrol et
     AppLogger.debug('QuestionDetailScreen - Question Type: ${question.questionType}');
@@ -621,9 +788,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     
     // Kelimede harf bulma soru tipi için özel ekran
     final questionType = question.questionType.toString().toUpperCase();
-    final questionFormat = (question.questionFormat ?? question.questionType).toString().toUpperCase() ?? '';
+    final questionFormat = (question.questionFormat ?? question.questionType).toString().toUpperCase();
     final adminNote = question.data?['adminNote']?.toString().toUpperCase() ?? '';
-    final activityTitle = widget.activity.title?.toString().toUpperCase() ?? '';
+    final activityTitle = widget.activity.title.toUpperCase();
     
     // contentObject'te words array'i var mı kontrol et
     final contentObject = question.data?['contentObject'];
@@ -843,42 +1010,53 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                       ),
                     ],
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    const Icon(Icons.music_note, color: Colors.white, size: 24),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.activity.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.of(context).pop(),
                         ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                    ),
-                        child: Text(
-                      'Puan: $_score/${widget.questions.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                        const Icon(Icons.music_note, color: Colors.white, size: 24),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.activity.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                      ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Puan: $_score/${widget.questions.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Toplam Geçen Süre Gösterimi (Çift Zamanlayıcı - Genel)
+                    // ActivityTimer widget'ı ile toplam süreyi göster
+                    ActivityTimer(
+                      initialDuration: _totalSessionDuration,
+                      onTimerUpdate: _onTotalTimerUpdate,
                     ),
                   ],
                 ),
@@ -936,19 +1114,26 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                                       ? CachedNetworkImage(
                                           imageUrl: _getFileUrl(imageFileId),
                                           fit: BoxFit.contain,
-                                            placeholder: (context, url) =>
-                                                const Center(
-                                                  child:
-                                                      CircularProgressIndicator(
-                                              color: Color(0xFF4FC3F7),
+                                          // 💡 PERFORMANS: Resim boyutunu optimize et (memory tasarrufu)
+                                          memCacheWidth: 400, // Performans için küçültüldü
+                                          memCacheHeight: 400,
+                                          placeholder: (context, url) => Container(
+                                            color: Colors.grey[200],
+                                            child: const Center(
+                                              child: SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Color(0xFF4FC3F7),
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                            errorWidget:
-                                                (context, url, error) =>
-                                                    const Center(
+                                          errorWidget: (context, url, error) =>
+                                              const Center(
                                             child: Icon(
-                                                        Icons
-                                                            .image_not_supported,
+                                              Icons.image_not_supported,
                                               size: 64,
                                               color: Colors.grey,
                                             ),

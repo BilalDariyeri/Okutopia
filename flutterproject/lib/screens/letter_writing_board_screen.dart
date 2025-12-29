@@ -138,13 +138,15 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
         successStatus: successStatus ?? 'Tamamlandı',
       );
       
-      // Oturum servisine de ekle
+      // Oturum servisine de ekle (TAMAMLANMIŞ olarak işaretle)
       _sessionService.addActivity(
         studentId: studentId,
         activityId: widget.activity.id,
         activityTitle: widget.activity.title,
         durationSeconds: duration,
         successStatus: successStatus ?? 'Tamamlandı',
+        isCompleted: true, // Aktivite başarıyla tamamlandı
+        correctAnswerCount: 0, // Bu aktivite tipinde doğru cevap sayısı yok
       );
     }
   }

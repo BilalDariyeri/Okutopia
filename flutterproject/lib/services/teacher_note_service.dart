@@ -175,6 +175,58 @@ class TeacherNoteService {
     }
   }
 
+  /// Öğrenci için veliye gönderilen son maili getir
+  /// GET /api/statistics/student/:studentId/last-email
+  Future<Map<String, dynamic>> getLastEmailToParent(String studentId) async {
+    try {
+      AppLogger.info('Fetching last email for student: $studentId');
+      
+      final token = await _getToken();
+      if (token == null) {
+        AppLogger.error('No token found for last email fetch');
+        throw Exception('Token bulunamadı. Lütfen tekrar giriş yapın.');
+      }
+
+      final response = await _dio.get(
+        '/statistics/student/$studentId/last-email',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        AppLogger.info('Last email fetched successfully for student: $studentId');
+        return response.data;
+      } else if (response.statusCode == 404) {
+        // Email bulunamadı - boş response döndür
+        AppLogger.debug('No email found for student: $studentId');
+        return {
+          'success': true,
+          'email': null,
+        };
+      } else {
+        AppLogger.warning('Last email fetch failed - unexpected response: ${response.statusCode}');
+        throw Exception(response.data['message'] ?? 'Son email yüklenemedi.');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final statusCode = e.response?.statusCode;
+        if (statusCode == 404) {
+          // Email bulunamadı - boş response döndür
+          AppLogger.debug('No email found for student: $studentId');
+          return {
+            'success': true,
+            'email': null,
+          };
+        }
+        AppLogger.error('Last email fetch failed - server error', e);
+        throw Exception(e.response?.data['message'] ?? 'Son email yüklenemedi.');
+      }
+      AppLogger.error('Last email fetch failed - connection error', e);
+      throw Exception('Bağlantı hatası: ${e.message}');
+    }
+  }
+
   /// Notu güncelle
   /// PUT /api/teacher-notes/:noteId
   Future<Map<String, dynamic>> updateNote({

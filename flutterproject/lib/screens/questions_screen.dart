@@ -13,6 +13,7 @@ import 'letter_dotted_screen.dart';
 import 'letter_c_dotted_screen.dart';
 import 'letter_writing_board_screen.dart';
 import 'letter_visual_finding_screen.dart';
+import '../utils/app_logger.dart';
 
 class QuestionsScreen extends StatefulWidget {
   final Activity activity;
@@ -255,9 +256,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final activityTitle = widget.activity.title.toUpperCase();
     
     // Debug: Soru metnini yazdır
-    print('🔍 C Harfi Serbest Çizim Kontrolü:');
-    print('   Soru Metni: $questionText');
-    print('   Aktivite Başlığı: ${widget.activity.title}');
+    AppLogger.debug('C Harfi Serbest Çizim Kontrolü:');
+    AppLogger.debug('   Soru Metni: $questionText');
+    AppLogger.debug('   Aktivite Başlığı: ${widget.activity.title}');
     
     // "C harfi serbest çizim" sorusunu tespit et
     // Hem soru metninde hem de aktivite başlığında kontrol et
@@ -273,7 +274,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
            (activityTitle.contains('C') && questionTextUpper.contains('SERBEST ÇIZIM')) ||
            (activityTitle.contains('C C') && questionTextUpper.contains('SERBEST'));
     
-    print('   Sonuç: $isCDrawing');
+    AppLogger.debug('   Sonuç: $isCDrawing');
     
     return isCDrawing;
   }

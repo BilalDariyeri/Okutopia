@@ -63,6 +63,12 @@ dependencies:
   
   # Video Player
   video_player: ^2.8.2            # Video dosyalarını çalmak için
+  
+  # Web APIs
+  web: ^1.1.1                     # Modern web APIs (replaces dart:html)
+  
+  # URL Launcher
+  url_launcher: ^6.3.1            # Email ve URL açma için
 
 dev_dependencies:
   flutter_test:

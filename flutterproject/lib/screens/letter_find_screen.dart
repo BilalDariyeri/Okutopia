@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
 import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,7 +9,9 @@ import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
+import '../services/statistics_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/statistics_provider.dart';
 import '../utils/app_logger.dart';
 
 class LetterFindScreen extends StatefulWidget {
@@ -41,24 +44,10 @@ class _LetterFindScreenState extends State<LetterFindScreen>
   int _score = 0;
   final ActivityTrackerService _activityTracker = ActivityTrackerService();
   final CurrentSessionService _sessionService = CurrentSessionService();
+  final StatisticsService _statisticsService = StatisticsService();
   DateTime? _activityStartTime;
   String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
-  
-  // Color palette for confetti
-  static const List<Color> confettiColors = [
-    Color(0xFFFF6B6B),
-    Color(0xFF4ECDC4),
-    Color(0xFF45B7D1),
-    Color(0xFF96CEB4),
-    Color(0xFFFFEAA7),
-    Color(0xFFDDA0DD),
-    Color(0xFF98D8C8),
-    Color(0xFFFFB347),
-    Color(0xFF87CEEB),
-    Color(0xFFF0E68C),
-    Color(0xFFFFA07A),
-    Color(0xFF20B2AA),
-  ];
+  bool _isSendingEmail = false; // Mail gönderme durumu
 
   @override
   void initState() {
@@ -76,6 +65,11 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       }
     });
     _startActivityTracking();
+    
+    // İlk kelime gösterilirken ikinci kelimenin resmini önceden yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadNextWordImage(_currentWordIndex);
+    });
   }
 
   @override
@@ -118,13 +112,15 @@ class _LetterFindScreenState extends State<LetterFindScreen>
         successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
       );
       
-      // Oturum servisine de ekle
+      // Oturum servisine de ekle (TAMAMLANMIŞ olarak işaretle)
       _sessionService.addActivity(
         studentId: studentId,
         activityId: widget.activity.id,
         activityTitle: widget.activity.title,
         durationSeconds: duration,
         successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
+        isCompleted: true, // Aktivite başarıyla tamamlandı
+        correctAnswerCount: _score, // Doğru cevap sayısı
       );
     }
   }
@@ -215,17 +211,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
   }
 
-  bool _checkLetterInWord() {
-    final words = _getWords();
-    if (_currentWordIndex >= words.length) return false;
-    
-    final word = words[_currentWordIndex];
-    final letters = List<String>.from(word['letters'] ?? []);
-    final targetLetter = _getTargetLetter();
-    
-    return letters.any((letter) => letter.toLowerCase() == targetLetter.toLowerCase());
-  }
-
   void _createSmallConfetti(int letterIndex) {
     // Konfeti animasyonu için controller oluştur
     final controller = AnimationController(
@@ -269,6 +254,11 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     setState(() {
       // Buton durumu güncellenir
     });
+    
+    // Tüm hedef harfler seçildiyse, bir sonraki kelimenin resmini önceden yükle
+    if (_areAllTargetLettersSelected()) {
+      _preloadNextWordImage(_currentWordIndex);
+    }
   }
 
   void _changeItem(int direction) {
@@ -281,9 +271,58 @@ class _LetterFindScreenState extends State<LetterFindScreen>
         _selectedLetters = <int>{}; // Yeni kelime için seçimleri sıfırla
         _hasAnswered = false;
       });
+      
+      // Bir sonraki kelimenin resmini önceden yükle (kullanıcı beklemez)
+      _preloadNextWordImage(_currentWordIndex);
     } else if (direction == 1 && newIndex >= words.length) {
       // Tüm kelimeler tamamlandı
       _showCompletionMessage();
+    }
+  }
+  
+  /// Bir sonraki kelimenin resmini önceden yükle (preload)
+  void _preloadNextWordImage(int currentWordIndex) {
+    if (!mounted) return;
+    
+    final words = _getWords();
+    final nextWordIndex = currentWordIndex + 1;
+    
+    // Bir sonraki kelime var mı kontrol et
+    if (nextWordIndex >= words.length) return;
+    
+    final nextWord = words[nextWordIndex];
+    
+    // Bir sonraki kelimenin resmini al
+    String? imageFileId = nextWord['image'];
+    if (imageFileId == null) {
+      final question = widget.questions[widget.currentQuestionIndex];
+      imageFileId = question.mediaFileId;
+    }
+    
+    if (imageFileId != null && imageFileId.isNotEmpty) {
+      final imageUrl = _getFileUrl(imageFileId);
+      
+      if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        // Resmi arka planda önceden yükle (kullanıcı beklemez)
+        Future.delayed(const Duration(milliseconds: 300), () async {
+          if (!mounted) return;
+          
+          try {
+            final imageProvider = CachedNetworkImageProvider(imageUrl);
+            await precacheImage(
+              imageProvider,
+              context,
+            ).timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                // Timeout durumunda sessizce devam et
+              },
+            );
+          } catch (e) {
+            // Hataları sessizce yok say (performans için)
+          }
+        });
+      }
     }
   }
 
@@ -323,6 +362,114 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       _hasAnswered = false;
       _score = 0;
     });
+  }
+
+  /// Etkinlik tamamlandığında mail gönder
+  Future<void> _sendCompletionEmail() async {
+    if (!mounted) return;
+    
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lütfen önce bir öğrenci seçin.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSendingEmail = true;
+    });
+
+    try {
+      // Öğrenci bilgilerini al (parent email için)
+      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
+      final parentEmail = stats['student']?['parentEmail']?.toString();
+      
+      if (parentEmail == null || parentEmail.isEmpty) {
+        throw Exception('Veli e-posta adresi bulunamadı. Lütfen öğrenci bilgilerini kontrol edin.');
+      }
+
+      // Provider'dan oturum verilerini al
+      final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
+      final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
+
+      // SADECE tamamlanmış aktiviteleri filtrele
+      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
+      
+      if (completedActivities.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSendingEmail = false;
+        });
+        return;
+      }
+      
+      final sessionActivitiesData = completedActivities.map((activity) {
+        return {
+          'activityId': activity.activityId,
+          'activityTitle': activity.activityTitle,
+          'durationSeconds': activity.durationSeconds,
+          'successStatus': activity.successStatus,
+          'completedAt': activity.completedAt.toIso8601String(),
+          'isCompleted': activity.isCompleted,
+          'correctAnswerCount': activity.correctAnswerCount,
+        };
+      }).toList();
+
+      // Backend'e oturum bazlı email gönder
+      final result = await _statisticsService.sendSessionEmailToParent(
+        selectedStudent.id,
+        parentEmail: parentEmail,
+        sessionActivities: sessionActivitiesData,
+        totalDurationSeconds: sessionTotalDuration.inSeconds,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rapor başarıyla gönderildi!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // İstatistikleri yenile
+        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
+        
+        // Ekranı kapat ve geri git
+        Navigator.of(context).pop();
+      } else {
+        throw Exception(result['message'] ?? 'Email gönderilemedi.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Hata: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingEmail = false;
+        });
+      }
+    }
   }
 
   void _startGame() {
@@ -425,26 +572,64 @@ class _LetterFindScreenState extends State<LetterFindScreen>
                     ),
                   ),
                   const SizedBox(height: 40),
-                  ElevatedButton(
-                    onPressed: _restartActivity,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 15,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Tamamlandı Butonu (Mail Gönder)
+                      ElevatedButton(
+                        onPressed: _isSendingEmail ? null : _sendCompletionEmail,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2196F3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: _isSendingEmail
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Tamamlandı',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
+                      const SizedBox(width: 20),
+                      // Tekrar Başla Butonu
+                      ElevatedButton(
+                        onPressed: _restartActivity,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B6B),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: const Text(
+                          'Tekrar Başla',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                      elevation: 4,
-                    ),
-                    child: const Text(
-                      'Tekrar Başla',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),

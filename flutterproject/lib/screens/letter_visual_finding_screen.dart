@@ -2,11 +2,17 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/statistics_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/auth_provider.dart';
+import '../providers/statistics_provider.dart';
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
 class GroupedQuestion {
@@ -41,6 +47,9 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
   int? _selectedIndex;
   bool _showCongratulations = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final StatisticsService _statisticsService = StatisticsService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  bool _isSendingEmail = false; // Mail gönderme durumu
   
   // Gruplanmış sorular (her sayfa için 3 resim)
   List<GroupedQuestion>? _groupedQuestions;
@@ -84,6 +93,11 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       duration: const Duration(seconds: 16),
       vsync: this,
     )..repeat();
+    
+    // İlk sayfa gösterilirken ikinci sayfanın resimlerini önceden yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadNextPageImages(_currentPage);
+    });
   }
 
   @override
@@ -475,6 +489,9 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       // Doğru cevap - tebrikler sesini çal
       _playCongratulationsSound();
       
+      // Bir sonraki sayfanın resimlerini önceden yükle (doğru cevap verildiğinde)
+      _preloadNextPageImages(_currentPage);
+      
       // Son sayfadaysa tebrik ekranını göster
       if (_groupedQuestions != null && _currentPage == _groupedQuestions!.length - 1) {
         Future.delayed(const Duration(seconds: 1), () {
@@ -518,6 +535,50 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       _pageCompleted = false;
       _selectedIndex = null;
     });
+    
+    // Bir sonraki sayfanın resimlerini önceden yükle (kullanıcı beklemez)
+    _preloadNextPageImages(_currentPage);
+  }
+  
+  /// Bir sonraki sayfanın resimlerini önceden yükle (preload)
+  void _preloadNextPageImages(int currentPage) {
+    if (!mounted || _groupedQuestions == null) return;
+    
+    // Bir sonraki sayfa var mı kontrol et
+    final nextPageIndex = currentPage + 1;
+    if (nextPageIndex >= _groupedQuestions!.length) return;
+    
+    final nextPage = _groupedQuestions![nextPageIndex];
+    
+    // Bir sonraki sayfanın tüm resimlerini önceden yükle
+    for (int i = 0; i < nextPage.imageFileIds.length; i++) {
+      final imageFileId = nextPage.imageFileIds[i];
+      if (imageFileId.isNotEmpty) {
+        final imageUrl = _getFileUrl(imageFileId);
+        
+        if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+          // Resmi arka planda önceden yükle (kullanıcı beklemez)
+          Future.delayed(Duration(milliseconds: i * 100), () async {
+            if (!mounted) return;
+            
+            try {
+              final imageProvider = CachedNetworkImageProvider(imageUrl);
+              await precacheImage(
+                imageProvider,
+                context,
+              ).timeout(
+                const Duration(seconds: 2),
+                onTimeout: () {
+                  // Timeout durumunda sessizce devam et
+                },
+              );
+            } catch (e) {
+              // Hataları sessizce yok say (performans için)
+            }
+          });
+        }
+      }
+    }
   }
 
   void _restartGame() {
@@ -527,6 +588,114 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       _selectedIndex = null;
       _showCongratulations = false;
     });
+  }
+
+  /// Etkinlik tamamlandığında mail gönder
+  Future<void> _sendCompletionEmail() async {
+    if (!mounted) return;
+    
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
+    final selectedStudent = authProvider.selectedStudent;
+    
+    if (selectedStudent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lütfen önce bir öğrenci seçin.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSendingEmail = true;
+    });
+
+    try {
+      // Öğrenci bilgilerini al (parent email için)
+      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
+      final parentEmail = stats['student']?['parentEmail']?.toString();
+      
+      if (parentEmail == null || parentEmail.isEmpty) {
+        throw Exception('Veli e-posta adresi bulunamadı. Lütfen öğrenci bilgilerini kontrol edin.');
+      }
+
+      // Provider'dan oturum verilerini al
+      final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
+      final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
+
+      // SADECE tamamlanmış aktiviteleri filtrele
+      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
+      
+      if (completedActivities.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSendingEmail = false;
+        });
+        return;
+      }
+      
+      final sessionActivitiesData = completedActivities.map((activity) {
+        return {
+          'activityId': activity.activityId,
+          'activityTitle': activity.activityTitle,
+          'durationSeconds': activity.durationSeconds,
+          'successStatus': activity.successStatus,
+          'completedAt': activity.completedAt.toIso8601String(),
+          'isCompleted': activity.isCompleted,
+          'correctAnswerCount': activity.correctAnswerCount,
+        };
+      }).toList();
+
+      // Backend'e oturum bazlı email gönder
+      final result = await _statisticsService.sendSessionEmailToParent(
+        selectedStudent.id,
+        parentEmail: parentEmail,
+        sessionActivities: sessionActivitiesData,
+        totalDurationSeconds: sessionTotalDuration.inSeconds,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rapor başarıyla gönderildi!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // İstatistikleri yenile
+        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
+        
+        // Ekranı kapat ve geri git
+        Navigator.of(context).pop();
+      } else {
+        throw Exception(result['message'] ?? 'Email gönderilemedi.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Hata: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingEmail = false;
+        });
+      }
+    }
   }
 
   String _getTargetLetter() {
@@ -1118,20 +1287,52 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                         style: TextStyle(fontSize: 32),
                       ),
                       const SizedBox(height: 30),
-                      ElevatedButton(
-                        onPressed: _restartGame,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF74B9FF),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Tamamlandı Butonu (Mail Gönder)
+                          ElevatedButton(
+                            onPressed: _isSendingEmail ? null : _sendCompletionEmail,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2196F3),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            child: _isSendingEmail
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Tamamlandı',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
                           ),
-                        ),
-                        child: const Text(
-                          'Tekrar Oyna',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
+                          const SizedBox(width: 20),
+                          // Tekrar Oyna Butonu
+                          ElevatedButton(
+                            onPressed: _restartGame,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF74B9FF),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            child: const Text(
+                              'Tekrar Oyna',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

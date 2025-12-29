@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../utils/app_logger.dart';
 
 class LetterCDrawingScreen extends StatefulWidget {
   final Activity activity;
@@ -35,8 +36,8 @@ class _LetterCDrawingScreenState extends State<LetterCDrawingScreen>
   StreamSubscription? _playerCompleteSubscription;
 
   late AnimationController _arrowAnimationController;
-  List<Offset> _arrowPositions = [];
-  List<double> _arrowRotations = [];
+  final List<Offset> _arrowPositions = [];
+  final List<double> _arrowRotations = [];
   
   // Gezegen animasyonları için controller'lar
   late AnimationController _planet1Controller;
@@ -66,11 +67,6 @@ class _LetterCDrawingScreenState extends State<LetterCDrawingScreen>
       'endAngle': 45 * math.pi / 180,
       'clockwise': true,
     },
-  };
-
-  // Ok offset'leri
-  final Map<String, Offset> _arrowOffsets = {
-    'mainCurve': const Offset(20, 0),
   };
 
   @override
@@ -146,7 +142,7 @@ class _LetterCDrawingScreenState extends State<LetterCDrawingScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      AppLogger.error('Ses çalınamadı', e);
     }
   }
 
@@ -197,7 +193,7 @@ class _LetterCDrawingScreenState extends State<LetterCDrawingScreen>
     // Çizim tamamlanma oranını kontrol et
     if (_currentPathPoints.length > 3) {
       final accuracy = _checkSegmentCompletion();
-      print('Doğruluk: $accuracy, Adım: $_currentStep');
+      AppLogger.debug('Doğruluk: $accuracy, Adım: $_currentStep');
       
       if (accuracy > 0.05) {
         // Çizimi düzgün C harfi yayına dönüştür (HTML'deki drawCleanLetter gibi)

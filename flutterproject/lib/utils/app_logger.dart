@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 /// Simple logging utility to replace print statements
@@ -7,53 +8,53 @@ class AppLogger {
   /// Debug level logging (only in debug mode)
   static void debug(String message) {
     if (kDebugMode) {
-      print('🔍 $_tag: $message');
+      developer.log('🔍 $message', name: _tag);
     }
   }
   
   /// Info level logging (shows in both debug and release)
   static void info(String message) {
-    print('ℹ️ $_tag: $message');
+    developer.log('ℹ️ $message', name: _tag);
   }
   
   /// Warning level logging
   static void warning(String message) {
-    print('⚠️ $_tag: $message');
+    developer.log('⚠️ $message', name: _tag, level: 900); // Warning level
   }
   
   /// Error level logging
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (kDebugMode) {
-      print('❌ $_tag: $message');
-    }
-    if (error != null) {
-      print('   Error: $error');
-    }
-    if (stackTrace != null && kDebugMode) {
-      print('   Stack trace:\n$stackTrace');
-    }
+    developer.log(
+      '❌ $message',
+      name: _tag,
+      level: 1000, // Error level
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
   
   /// Network request logging
   static void network(String method, String url, {int? statusCode, String? response}) {
     if (kDebugMode) {
-      print('🌐 $_tag: $method $url');
+      final buffer = StringBuffer('🌐 $method $url');
       if (statusCode != null) {
-        print('   Status: $statusCode');
+        buffer.write('\n   Status: $statusCode');
       }
       if (response != null) {
-        print('   Response: $response');
+        buffer.write('\n   Response: $response');
       }
+      developer.log(buffer.toString(), name: _tag);
     }
   }
   
   /// User action logging
   static void userAction(String action, {Map<String, dynamic>? data}) {
     if (kDebugMode) {
-      print('👤 $_tag: $action');
+      final buffer = StringBuffer('👤 $action');
       if (data != null) {
-        print('   Data: $data');
+        buffer.write('\n   Data: $data');
       }
+      developer.log(buffer.toString(), name: _tag);
     }
   }
 }

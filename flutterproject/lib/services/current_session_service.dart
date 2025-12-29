@@ -45,6 +45,8 @@ class CurrentSessionService {
     required String activityTitle,
     required int durationSeconds,
     String? successStatus,
+    bool isCompleted = false, // Aktivite başarıyla tamamlandı mı?
+    int correctAnswerCount = 0, // Doğru cevap sayısı
   }) {
     if (!_sessionData.containsKey(studentId)) {
       // Oturum başlatılmamışsa başlat
@@ -57,10 +59,12 @@ class CurrentSessionService {
       durationSeconds: durationSeconds,
       completedAt: DateTime.now(),
       successStatus: successStatus,
+      isCompleted: isCompleted,
+      correctAnswerCount: correctAnswerCount,
     );
 
     _sessionData[studentId]!.add(activity);
-    debugPrint('✅ Aktivite eklendi: $activityTitle - $durationSeconds s');
+    debugPrint('✅ Aktivite eklendi: $activityTitle - $durationSeconds s - Tamamlandı: $isCompleted');
   }
 
   /// Oturum verilerini getir
@@ -115,6 +119,8 @@ class SessionActivity {
   final int durationSeconds; // Saniye cinsinden
   final DateTime completedAt;
   final String? successStatus; // Örn: "Başarılı", "Tamamlandı", vb.
+  final bool isCompleted; // Aktivite başarıyla tamamlandı mı?
+  final int correctAnswerCount; // Doğru cevap sayısı
 
   SessionActivity({
     required this.activityId,
@@ -122,6 +128,8 @@ class SessionActivity {
     required this.durationSeconds,
     required this.completedAt,
     this.successStatus,
+    this.isCompleted = false, // Varsayılan olarak false
+    this.correctAnswerCount = 0, // Varsayılan olarak 0
   });
 
   Duration get duration => Duration(seconds: durationSeconds);
