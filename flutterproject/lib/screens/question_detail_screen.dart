@@ -8,7 +8,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
-import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../widgets/activity_timer.dart';
 import '../utils/app_logger.dart';
 import 'letter_find_screen.dart';
@@ -65,8 +65,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
     _activityStartTime = DateTime.now();
     
     // Toplam oturum süresini CurrentSessionService'den al
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     if (selectedStudent != null) {
       _totalSessionDuration = _sessionService.getSessionTotalDuration(selectedStudent.id);
     }
@@ -303,8 +303,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
         _preloadNextQuestion(_currentIndex);
       } else if (mounted) {
         // Tüm sorular bitti - aktiviteyi oturum servisine ekle (TAMAMLANMIŞ olarak işaretle)
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final selectedStudent = authProvider.selectedStudent;
+        final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+        final selectedStudent = studentSelectionProvider.selectedStudent;
         
         if (selectedStudent != null && _activityStartTime != null) {
           final duration = DateTime.now().difference(_activityStartTime!).inSeconds;

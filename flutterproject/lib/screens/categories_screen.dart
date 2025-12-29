@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../providers/content_provider.dart';
 import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
@@ -93,8 +94,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   }
 
   Future<void> _initializeSession() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
     if (selectedStudent == null) return;
     
@@ -129,8 +130,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     if (!mounted) return;
     
     // CurrentSessionService'e güncelle
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     if (selectedStudent != null) {
       _sessionService.updateSessionTotalDuration(selectedStudent.id, duration);
     }
@@ -198,8 +199,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false); // listen: false - gereksiz rebuild'i önle
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final selectedStudent = authProvider.selectedStudent;
+    final contentProvider = Provider.of<ContentProvider>(context, listen: false); // listen: false - sadece veri okuma için
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
     // Cache-First: Provider'dan kategorileri al (anında gösterilir)
     final categories = contentProvider.categories ?? [];
@@ -277,7 +279,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                           ),
                           // Ana içerik - Cache-First: Anında gösterilir
                           SliverPadding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: MediaQuery.of(context).size.width * 0.04, // Responsive padding (~12-16px)
+                              vertical: MediaQuery.of(context).size.height * 0.02, // Responsive padding (~16px)
+                            ),
                             sliver: categories.isEmpty
                                 ? SliverToBoxAdapter(
                                     child: contentProvider.isRefreshingCategories
@@ -285,11 +290,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                                         : _buildEmptyState(),
                                   )
                                 : SliverGrid(
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 3, // 3 sütun (web sitesindeki gibi)
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.85, // Kartlar daha kare
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: MediaQuery.of(context).size.width < 400 ? 0.8 : 0.85, // Küçük ekranlarda daha kompakt
                                     ),
                                     delegate: SliverChildBuilderDelegate(
                                       (context, index) {
@@ -663,11 +668,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.85,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: MediaQuery.of(context).size.width < 400 ? 0.8 : 0.85, // Küçük ekranlarda daha kompakt
         ),
         itemCount: 6, // 6 skeleton kart göster
         itemBuilder: (context, index) {
@@ -715,26 +720,28 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
   Widget _buildEmptyState() {
     return Container(
-      padding: const EdgeInsets.all(40),
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.08), // Responsive padding (~30px)
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16), // Standart BorderRadius
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.category_outlined,
-            size: 64,
+            size: MediaQuery.of(context).size.width * 0.15, // Responsive icon size (~56px)
             color: Colors.white.withValues(alpha: 0.5),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.02), // Responsive spacing (~16px)
           Text(
             'Henüz kategori eklenmemiş',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 16,
+              fontSize: MediaQuery.of(context).size.width * 0.04, // Responsive font size (~14-15px)
               fontWeight: FontWeight.w400,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -755,73 +762,78 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2C), // Koyu gri (web sitesindeki gibi)
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Kategori İkonu (kare, renkli - web sitesindeki gibi büyük)
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 14),
-            // Kategori İsmi (web sitesindeki gibi)
-            Text(
-              category.name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            // Alt başlık (varsa - örn: "hece-kelime-cümle")
-            if (category.description != null && category.description!.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                category.description!,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      child: AspectRatio(
+        aspectRatio: 1.0,
+        child: Container(
+          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.035), // Responsive padding (~10-14px)
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C2C2C), // Koyu gri (web sitesindeki gibi)
+            borderRadius: BorderRadius.circular(16), // Standart BorderRadius
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
-          ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Kategori İkonu - Responsive boyutlandırma
+              Container(
+                width: MediaQuery.of(context).size.width * 0.11, // ~44px küçük ekranlarda
+                height: MediaQuery.of(context).size.width * 0.11,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12), // Standart BorderRadius
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: MediaQuery.of(context).size.width * 0.055, // ~22px küçük ekranlarda
+                ),
+              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.012), // Responsive spacing (~8px)
+              // Kategori İsmi
+              Expanded(
+                child: Text(
+                  category.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Alt başlık (varsa - örn: "hece-kelime-cümle")
+              if (category.description != null && category.description!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  category.description!,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

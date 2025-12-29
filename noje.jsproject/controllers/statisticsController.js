@@ -1053,7 +1053,14 @@ exports.startReading = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,
@@ -1286,7 +1293,14 @@ exports.getTeacherStudents = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,
@@ -1381,7 +1395,14 @@ exports.getStudentStatisticsForTeacher = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,

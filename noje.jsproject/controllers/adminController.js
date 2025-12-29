@@ -47,9 +47,13 @@ exports.getQuestionTypes = async (req, res) => {
 
 // JWT token oluşturma yardımcı fonksiyonu
 const generateToken = (userId) => {
+    // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+    if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable tanımlı değil!');
+    }
     return jwt.sign(
         { userId },
-        process.env.JWT_SECRET || 'fallback-secret-key-change-in-production',
+        process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRE || '30d' }
     );
 };

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../providers/statistics_provider.dart';
 import '../services/statistics_service.dart';
+import '../services/current_session_service.dart'; // SessionActivity için
+import '../models/student_model.dart'; // Student model için
+import '../utils/debounce_throttle.dart'; // 🔒 PERFORMANCE: Rate limiting
 import 'dart:async';
 
 class StatisticsScreen extends StatefulWidget {
@@ -16,6 +20,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   final StatisticsService _statisticsService = StatisticsService();
   final TextEditingController _emailController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  // 🔒 PERFORMANCE: Rate limiting - Debounce ile çoklu tıklamayı önle
+  final _debouncer = Debouncer(delay: const Duration(milliseconds: 500));
   
   bool _isSendingEmail = false;
   String? _errorMessage;
@@ -33,6 +39,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   void dispose() {
     _emailController.dispose();
     _scrollController.dispose();
+    _debouncer.dispose(); // 🔒 PERFORMANCE: Debouncer'ı temizle
     super.dispose();
   }
 
@@ -40,9 +47,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Future<void> _loadStatisticsFromProvider() async {
     if (!mounted) return;
     
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
     if (selectedStudent == null) {
       setState(() {
@@ -89,8 +96,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Future<void> _sendEmailReport() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
     if (selectedStudent == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -234,17 +241,28 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false); // listen: false - gereksiz rebuild'i önle
-    final statisticsProvider = Provider.of<StatisticsProvider>(context);
-    final selectedStudent = authProvider.selectedStudent;
+    // 🔒 PERFORMANCE: Over-rebuild önleme - listen: false kullanarak gereksiz rebuild'leri önle
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
-    // Cache-First: Provider'dan verileri al (anında gösterilir)
-    final sessionActivities = selectedStudent != null
-        ? statisticsProvider.getSessionActivities(selectedStudent.id) ?? []
-        : [];
-    final sessionStartTime = selectedStudent != null
-        ? statisticsProvider.getSessionStartTime(selectedStudent.id)
-        : null;
+    // 🔒 PERFORMANCE: Consumer kullanarak sadece statistics değiştiğinde rebuild et
+    return Consumer<StatisticsProvider>(
+      builder: (context, statisticsProvider, child) {
+        // Cache-First: Provider'dan verileri al (anında gösterilir)
+        final sessionActivities = (selectedStudent != null
+            ? statisticsProvider.getSessionActivities(selectedStudent.id) ?? []
+            : []) as List<SessionActivity>;
+        final sessionStartTime = selectedStudent != null
+            ? statisticsProvider.getSessionStartTime(selectedStudent.id)
+            : null;
+        
+        return _buildScaffold(context, sessionActivities, sessionStartTime, selectedStudent);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, List<SessionActivity> sessionActivities, DateTime? sessionStartTime, Student? selectedStudent) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF6C5CE7),
@@ -653,7 +671,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(
-                              onPressed: _isSendingEmail ? null : _sendEmailReport,
+                              onPressed: _isSendingEmail ? null : () {
+                                // 🔒 PERFORMANCE: Rate limiting - Debounce ile çoklu tıklamayı önle
+                                _debouncer.call(() {
+                                  _sendEmailReport();
+                                });
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF4ECDC4),
                                 foregroundColor: Colors.white,

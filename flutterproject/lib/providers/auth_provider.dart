@@ -1,21 +1,27 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_model.dart';
-import '../models/student_model.dart';
+// 🔒 ARCHITECTURE: Student model import kaldırıldı (StudentSelectionProvider'a taşındı)
 import '../services/auth_service.dart';
 import '../services/token_service.dart';
 
+// 🔒 ARCHITECTURE: God Object - Bu sınıf çok fazla sorumluluk taşıyor
+// TODO: Bu sınıfı şu şekilde bölmek gerekiyor:
+//   1. AuthStateProvider - Sadece authentication state (user, token, isAuthenticated)
+//   2. UserProfileProvider - User profile management (updateUser, etc.)
+//   3. StudentSelectionProvider - Student selection logic
+//   4. SessionProvider - Session management (logout, etc.)
+// Bu bölme işlemi büyük bir refactoring gerektirdiği için şu an yapılmadı.
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final SharedPreferences _prefs;
 
   User? _user;
   String? _token;
   Classroom? _classroom;
-  Student? _selectedStudent;
+  // 🔒 ARCHITECTURE: Student selection moved to StudentSelectionProvider
+  // Artık burada _selectedStudent yok, StudentSelectionProvider kullanılmalı
   bool _isLoading = false;
   String? _errorMessage;
   bool _isInitialized = false;
@@ -39,9 +45,11 @@ class AuthProvider with ChangeNotifier {
 
   // Getters
   User? get user => _user;
-  String? get token => _token;
+  String? get token => _token; // Token caching: TokenService zaten cache kullanıyor
   Classroom? get classroom => _classroom;
-  Student? get selectedStudent => _selectedStudent;
+  // 🔒 ARCHITECTURE: selectedStudent getter kaldırıldı
+  // Artık StudentSelectionProvider kullanılmalı:
+  // Provider.of<StudentSelectionProvider>(context).selectedStudent
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isInitialized => _isInitialized;
@@ -50,6 +58,7 @@ class AuthProvider with ChangeNotifier {
   // Kullanıcı bilgilerini storage'dan yükle
   Future<void> _loadUserFromStorage() async {
     try {
+      // Token caching: Önce cache'den kontrol et, yoksa TokenService'den al
       _token = await TokenService.getToken();
       
       // Clear invalid stored data if token is missing
@@ -64,17 +73,8 @@ class AuthProvider with ChangeNotifier {
           final userMap = jsonDecode(userJson) as Map<String, dynamic>;
           _user = User.fromJson(userMap);
           
-          // Load selected student
-          final studentJson = _prefs.getString('selectedStudent');
-          if (studentJson != null) {
-            try {
-              final studentMap = jsonDecode(studentJson) as Map<String, dynamic>;
-              _selectedStudent = Student.fromJson(studentMap);
-            } catch (e) {
-              // Clear corrupted student data
-              await _prefs.remove('selectedStudent');
-            }
-          }
+          // 🔒 ARCHITECTURE: Student selection loading moved to StudentSelectionProvider
+          // StudentSelectionProvider kendi initState'inde yükleyecek
         } catch (e) {
           // Clear corrupted user data
           await _clearStoredUserData();
@@ -90,11 +90,11 @@ class AuthProvider with ChangeNotifier {
   Future<void> _clearStoredUserData() async {
     await TokenService.clearAll();
     await _prefs.remove('user');
-    await _prefs.remove('selectedStudent');
+    // 🔒 ARCHITECTURE: selectedStudent temizleme StudentSelectionProvider'a taşındı
+    // StudentSelectionProvider.clearAll() çağrılmalı (logout'ta)
     
     _token = null;
     _user = null;
-    _selectedStudent = null;
   }
 
   // Giriş yap
@@ -187,32 +187,27 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Öğrenci seç
-  void setSelectedStudent(Student student) {
-    _selectedStudent = student;
-    // Seçili öğrenciyi SharedPreferences'a kaydet
-    _prefs.setString('selectedStudent', jsonEncode(student.toJson()));
-    notifyListeners();
-  }
-
-  // Seçili öğrenciyi temizle
-  void clearSelectedStudent() {
-    _selectedStudent = null;
-    _prefs.remove('selectedStudent');
-    notifyListeners();
-  }
+  // 🔒 ARCHITECTURE: Student selection methods moved to StudentSelectionProvider
+  // Artık bu metodlar yok, StudentSelectionProvider kullanılmalı:
+  // Provider.of<StudentSelectionProvider>(context, listen: false).setSelectedStudent(student)
+  // Provider.of<StudentSelectionProvider>(context, listen: false).clearSelectedStudent()
 
   // Çıkış yap
+  // 🔒 ARCHITECTURE: logout() metodunda StudentSelectionProvider'ı temizlemek için
+  // Bu metodu çağıran yerlerde StudentSelectionProvider.clearAll() da çağrılmalı
+  // Örnek: 
+  //   await authProvider.logout();
+  //   Provider.of<StudentSelectionProvider>(context, listen: false).clearAll();
   Future<void> logout() async {
     _token = null;
     _user = null;
     _classroom = null;
-    _selectedStudent = null;
+    // 🔒 ARCHITECTURE: _selectedStudent kaldırıldı, StudentSelectionProvider temizlenmeli
     _errorMessage = null;
 
     await TokenService.clearAll();
     await _prefs.remove('user');
-    await _prefs.remove('selectedStudent');
+    // 🔒 ARCHITECTURE: selectedStudent temizleme StudentSelectionProvider'a taşındı
 
     notifyListeners();
   }

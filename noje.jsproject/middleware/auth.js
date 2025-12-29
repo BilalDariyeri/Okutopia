@@ -20,7 +20,14 @@ exports.authenticate = async (req, res, next) => {
         const token = authHeader.substring(7);
 
         // Token'ı doğrula
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+        // 🔒 SECURITY: JWT_SECRET environment variable zorunlu, fallback secret kullanılmamalı
+        if (!process.env.JWT_SECRET) {
+            console.error('❌ KRİTİK GÜVENLİK HATASI: JWT_SECRET environment variable tanımlı değil!');
+            return res.status(500).json({ 
+                message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.' 
+            });
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // userId'yi kontrol et
         if (!decoded.userId) {

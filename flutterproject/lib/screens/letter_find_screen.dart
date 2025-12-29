@@ -9,7 +9,7 @@ import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/activity_tracker_service.dart';
 import '../services/current_session_service.dart';
-import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../utils/app_logger.dart';
 
 class LetterFindScreen extends StatefulWidget {
@@ -81,8 +81,8 @@ class _LetterFindScreenState extends State<LetterFindScreen>
 
   Future<void> _startActivityTracking() async {
     if (!mounted) return;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
     
     if (selectedStudent != null) {
       _studentId = selectedStudent.id; // dispose() için sakla
@@ -97,7 +97,8 @@ class _LetterFindScreenState extends State<LetterFindScreen>
 
   Future<void> _endActivityTracking({String? successStatus}) async {
     // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
-    final studentId = _studentId ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).selectedStudent?.id : null);
+    // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
+    final studentId = _studentId ?? (mounted ? Provider.of<StudentSelectionProvider>(context, listen: false).selectedStudent?.id : null);
     
     if (studentId != null && _activityStartTime != null) {
       final duration = DateTime.now().difference(_activityStartTime!).inSeconds;

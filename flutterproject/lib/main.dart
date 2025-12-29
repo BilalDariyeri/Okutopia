@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
 import 'providers/content_provider.dart';
 import 'providers/statistics_provider.dart';
+import 'providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/student_selection_screen.dart';
@@ -33,6 +34,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => StudentSelectionProvider(prefs)), // 🔒 ARCHITECTURE: Student selection ayrıldı
         ChangeNotifierProvider(create: (_) => ContentProvider()),
         ChangeNotifierProvider(create: (_) => StatisticsProvider()),
       ],

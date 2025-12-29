@@ -10,7 +10,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
-import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
 class GroupedQuestion {
@@ -493,8 +493,8 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
       // Son sayfadaysa tebrik ekranını göster ve aktiviteyi kaydet
       if (_groupedQuestions != null && _currentPage == _groupedQuestions!.length - 1) {
         // Aktiviteyi oturum servisine ekle (TAMAMLANMIŞ olarak işaretle)
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final selectedStudent = authProvider.selectedStudent;
+        final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+        final selectedStudent = studentSelectionProvider.selectedStudent; // 🔒 ARCHITECTURE: StudentSelectionProvider kullanılıyor
         
         if (selectedStudent != null && _activityStartTime != null) {
           final duration = DateTime.now().difference(_activityStartTime!).inSeconds;

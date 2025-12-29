@@ -60,10 +60,8 @@ class AnimationManager {
     debugPrint('🗑️  Disposing all ${_controllers.length} animation controllers');
     
     _controllers.forEach((key, controller) {
-      if (controller != null) {
-        debugPrint('🗑️  Disposing: $key');
-        controller.dispose();
-      }
+      debugPrint('🗑️  Disposing: $key');
+      controller.dispose();
     });
     
     _controllers.clear();
@@ -111,9 +109,7 @@ class AnimationManager {
     };
 
     _controllers.forEach((key, controller) {
-      if (controller != null) {
-        info['activeControllers'][key] = getControllerStatus(key);
-      }
+      info['activeControllers'][key] = getControllerStatus(key);
     });
 
     return info;

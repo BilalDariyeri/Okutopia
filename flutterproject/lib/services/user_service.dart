@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart'; // kDebugMode için
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
@@ -76,11 +77,16 @@ class UserService {
     required String newPassword,
   }) async {
     try {
-      AppLogger.info('Changing password for user: $userId');
+      // 🔒 SECURITY: Password bilgisi loglanmamalı
+      if (kDebugMode) {
+        AppLogger.info('Changing password for user: $userId');
+      }
       
       final token = await _getToken();
       if (token == null) {
-        AppLogger.error('No token found for password change');
+        if (kDebugMode) {
+          AppLogger.error('No token found for password change');
+        }
         throw Exception('Token bulunamadı. Lütfen tekrar giriş yapın.');
       }
 
@@ -90,7 +96,7 @@ class UserService {
           '/users/login',
           data: {
             'email': (await _getCurrentUserEmail()) ?? '',
-            'password': oldPassword,
+            'password': oldPassword, // 🔒 SECURITY: Password sadece request body'de, loglanmıyor
           },
         );
         
@@ -98,7 +104,9 @@ class UserService {
           throw Exception('Eski şifre hatalı.');
         }
       } catch (e) {
-        AppLogger.warning('Old password verification failed');
+        if (kDebugMode) {
+          AppLogger.warning('Old password verification failed');
+        }
         throw Exception('Eski şifre hatalı. Lütfen tekrar deneyin.');
       }
 
@@ -123,21 +131,30 @@ class UserService {
       );
 
       if (response.statusCode == 200) {
-        AppLogger.info('Password changed successfully for user: $userId');
+        if (kDebugMode) {
+          AppLogger.info('Password changed successfully for user: $userId');
+        }
         return {
           'success': true,
           'message': response.data['message'] ?? 'Şifre başarıyla değiştirildi.',
         };
       } else {
-        AppLogger.warning('Password change failed - unexpected response: ${response.statusCode}');
+        if (kDebugMode) {
+          AppLogger.warning('Password change failed - unexpected response: ${response.statusCode}');
+        }
         throw Exception(response.data['message'] ?? 'Şifre değiştirilemedi.');
       }
     } on DioException catch (e) {
       if (e.response != null) {
-        AppLogger.error('Password change failed - server error', e);
+        if (kDebugMode) {
+          // 🔒 SECURITY: Error detaylarını sadece debug modda logla, production'da hassas bilgi sızıntısı olmasın
+          AppLogger.error('Password change failed - server error', e);
+        }
         throw Exception(e.response?.data['message'] ?? 'Şifre değiştirilemedi.');
       }
-      AppLogger.error('Password change failed - connection error', e);
+      if (kDebugMode) {
+        AppLogger.error('Password change failed - connection error', e);
+      }
       throw Exception('Bağlantı hatası: ${e.message}');
     }
   }

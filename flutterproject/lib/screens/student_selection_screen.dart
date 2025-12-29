@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart'; // 🔒 ARCHITECTURE: Student selection ayrıldı
 import '../services/classroom_service.dart';
 import '../models/student_model.dart';
 import '../models/user_model.dart';
@@ -695,8 +696,11 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
         IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () async {
+            // 🔒 ARCHITECTURE: Logout'ta hem AuthProvider hem StudentSelectionProvider temizlenmeli
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.logout();
+            final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+            await studentSelectionProvider.clearAll();
             if (!mounted) return;
             Navigator.of(context).pushReplacementNamed('/login');
           },
@@ -873,9 +877,9 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
 
     return GestureDetector(
       onTap: () async {
-        // Öğrenciyi AuthProvider'a kaydet
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        authProvider.setSelectedStudent(student);
+        // 🔒 ARCHITECTURE: Öğrenciyi StudentSelectionProvider'a kaydet
+        final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+        studentSelectionProvider.setSelectedStudent(student);
         
         // Kısa bir bekleme (geçişi yavaşlatmak için)
         await Future.delayed(const Duration(milliseconds: 400));

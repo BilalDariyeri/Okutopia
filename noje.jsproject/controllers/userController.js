@@ -7,9 +7,13 @@ const logger = require('../config/logger');
 
 // JWT token oluşturma yardımcı fonksiyonu
 const generateToken = (userId) => {
+    // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+    if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable tanımlı değil!');
+    }
     return jwt.sign(
         { userId },
-        process.env.JWT_SECRET || 'fallback-secret-key-change-in-production',
+        process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRE || '30d' }
     );
 };
@@ -145,9 +149,8 @@ exports.login = async (req, res) => {
     }
 
     // Şifre kontrolü
-    logger.info('🔐 Şifre kontrol ediliyor...');
+    // 🔒 SECURITY: Password bilgisi loglanmamalı
     const isPasswordMatch = await user.comparePassword(password);
-    logger.info('🔐 Şifre eşleşmesi:', isPasswordMatch);
     
     if (!isPasswordMatch) {
       logger.error('❌ Şifre eşleşmedi');
@@ -221,7 +224,11 @@ exports.addStudentToMyClassroom = async (req, res) => {
     let decoded;
     
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+      // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable tanımlı değil!');
+      }
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       await session.abortTransaction();
       session.endSession();

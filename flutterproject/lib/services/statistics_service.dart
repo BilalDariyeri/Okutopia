@@ -1,19 +1,16 @@
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/app_logger.dart';
 import 'token_service.dart';
 
 class StatisticsService {
   final Dio _dio;
-  final FlutterSecureStorage _storage;
 
   StatisticsService()
       : _dio = Dio(BaseOptions(
           baseUrl: ApiConfig.baseUrl,
           headers: {'Content-Type': 'application/json'},
-        )),
-        _storage = const FlutterSecureStorage();
+        ));
 
   Future<String?> _getToken() async {
     return await TokenService.getToken();

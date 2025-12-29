@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/student_selection_provider.dart';
 import '../services/teacher_note_service.dart';
 import '../models/teacher_note_model.dart';
 
@@ -57,7 +58,8 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
 
   Future<void> _loadData() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
 
     if (selectedStudent == null) {
       setState(() {
@@ -133,8 +135,8 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
       return;
     }
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
 
     if (selectedStudent == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +159,7 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
         content: content,
         category: _selectedCategory,
         priority: _selectedPriority,
-        teacherId: authProvider.user?.id,
+        teacherId: Provider.of<AuthProvider>(context, listen: false).user?.id,
       );
 
       if (result['success'] == true) {
@@ -497,8 +499,8 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
   }
 
   Widget _buildNewNoteDialog() {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
 
     return Dialog(
       shape: RoundedRectangleBorder(
@@ -795,8 +797,8 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
 
     return Stack(
       children: [
