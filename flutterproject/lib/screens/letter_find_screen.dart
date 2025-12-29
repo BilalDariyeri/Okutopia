@@ -308,7 +308,11 @@ class _LetterFindScreenState extends State<LetterFindScreen>
           if (!mounted) return;
           
           try {
-            final imageProvider = CachedNetworkImageProvider(imageUrl);
+            final imageProvider = CachedNetworkImageProvider(
+              imageUrl,
+              maxWidth: 400, // Görüntü kodlama hatası için maxWidth ekle
+              maxHeight: 400,
+            );
             await precacheImage(
               imageProvider,
               context,
@@ -316,10 +320,12 @@ class _LetterFindScreenState extends State<LetterFindScreen>
               const Duration(seconds: 2),
               onTimeout: () {
                 // Timeout durumunda sessizce devam et
+                debugPrint('⚠️ Image preload timeout: $imageUrl');
               },
             );
           } catch (e) {
-            // Hataları sessizce yok say (performans için)
+            // Görüntü kodlama hatası dahil tüm hataları yakala
+            debugPrint('⚠️ Image preload error: $imageUrl - $e');
           }
         });
       }
@@ -767,16 +773,24 @@ class _LetterFindScreenState extends State<LetterFindScreen>
                               ? CachedNetworkImage(
                                   imageUrl: _getFileUrl(imageFileId),
                                   fit: BoxFit.contain,
+                                  maxWidthDiskCache: 400, // Görüntü kodlama hatası için ekle
+                                  maxHeightDiskCache: 400,
+                                  memCacheWidth: 400,
+                                  memCacheHeight: 400,
                                   placeholder: (context, url) => const Center(
                                     child: CircularProgressIndicator(),
                                   ),
-                                  errorWidget: (context, url, error) => const Center(
-                                    child: Icon(
-                                      Icons.image_not_supported,
-                                      size: 64,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
+                                  errorWidget: (context, url, error) {
+                                    // Görüntü kodlama hatasını yakala
+                                    debugPrint('❌ Image error: $url - $error');
+                                    return const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
                                 )
                               : const Center(
                                   child: Icon(

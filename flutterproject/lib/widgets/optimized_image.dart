@@ -42,6 +42,9 @@ class OptimizedImage extends StatelessWidget {
       // 💡 PERFORMANS: Resim boyutunu optimize et (memory tasarrufu)
       memCacheWidth: maxCacheWidth,
       memCacheHeight: maxCacheHeight,
+      // Görüntü kodlama hatası için maxWidthDiskCache ekle
+      maxWidthDiskCache: maxCacheWidth,
+      maxHeightDiskCache: maxCacheHeight,
       placeholder: placeholder != null
           ? (context, url) => placeholder!
           : (context, url) => Container(
@@ -58,14 +61,22 @@ class OptimizedImage extends StatelessWidget {
                 ),
               ),
       errorWidget: errorWidget != null
-          ? (context, url, error) => errorWidget!
-          : (context, url, error) => const Center(
+          ? (context, url, error) {
+              // Görüntü kodlama hatasını yakala
+              debugPrint('❌ Image error: $url - $error');
+              return errorWidget!;
+            }
+          : (context, url, error) {
+              // Görüntü kodlama hatasını yakala
+              debugPrint('❌ Image error: $url - $error');
+              return const Center(
                 child: Icon(
                   Icons.image_not_supported,
                   size: 64,
                   color: Colors.grey,
                 ),
-              ),
+              );
+            },
     );
 
     if (borderRadius != null) {

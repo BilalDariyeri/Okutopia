@@ -1117,6 +1117,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                                           // 💡 PERFORMANS: Resim boyutunu optimize et (memory tasarrufu)
                                           memCacheWidth: 400, // Performans için küçültüldü
                                           memCacheHeight: 400,
+                                          maxWidthDiskCache: 400, // Görüntü kodlama hatası için ekle
+                                          maxHeightDiskCache: 400,
                                           placeholder: (context, url) => Container(
                                             color: Colors.grey[200],
                                             child: const Center(
@@ -1130,14 +1132,17 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
                                               ),
                                             ),
                                           ),
-                                          errorWidget: (context, url, error) =>
-                                              const Center(
-                                            child: Icon(
-                                              Icons.image_not_supported,
-                                              size: 64,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
+                                          errorWidget: (context, url, error) {
+                                            // Görüntü kodlama hatasını yakala
+                                            debugPrint('❌ Image error: $url - $error');
+                                            return const Center(
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                size: 64,
+                                                color: Colors.grey,
+                                              ),
+                                            );
+                                          },
                                         )
                                       : const Center(
                                           child: Icon(

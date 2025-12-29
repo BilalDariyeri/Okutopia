@@ -562,7 +562,11 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
             if (!mounted) return;
             
             try {
-              final imageProvider = CachedNetworkImageProvider(imageUrl);
+              final imageProvider = CachedNetworkImageProvider(
+                imageUrl,
+                maxWidth: 400, // Görüntü kodlama hatası için maxWidth ekle
+                maxHeight: 400,
+              );
               await precacheImage(
                 imageProvider,
                 context,
@@ -570,10 +574,12 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                 const Duration(seconds: 2),
                 onTimeout: () {
                   // Timeout durumunda sessizce devam et
+                  debugPrint('⚠️ Image preload timeout: $imageUrl');
                 },
               );
             } catch (e) {
-              // Hataları sessizce yok say (performans için)
+              // Görüntü kodlama hatası dahil tüm hataları yakala
+              debugPrint('⚠️ Image preload error: $imageUrl - $e');
             }
           });
         }
@@ -1118,18 +1124,27 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
                                                     imageUrl: _getFileUrl(imageFileId),
                                                     cacheKey: '${imageFileId}_${_currentPage}_${index}_${_groupedQuestions?.length ?? 0}', // Sayfa ve soru sayısına göre cache key
                                                     fit: BoxFit.contain,
+                                                    // Görüntü kodlama hatası için maxWidth/maxHeight ekle
+                                                    maxWidthDiskCache: 400,
+                                                    maxHeightDiskCache: 400,
+                                                    memCacheWidth: 400,
+                                                    memCacheHeight: 400,
                                                     placeholder: (context, url) => const Center(
                                                       child: CircularProgressIndicator(
                                                         color: Color(0xFF4FC3F7),
                                                       ),
                                                     ),
-                                                    errorWidget: (context, url, error) => const Center(
-                                                      child: Icon(
-                                                        Icons.image_not_supported,
-                                                        size: 48,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
+                                                    errorWidget: (context, url, error) {
+                                                      // Görüntü kodlama hatasını yakala
+                                                      debugPrint('❌ Image error: $url - $error');
+                                                      return const Center(
+                                                        child: Icon(
+                                                          Icons.image_not_supported,
+                                                          size: 48,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      );
+                                                    },
                                                   )
                                                 : const Center(
                                                     child: Icon(
