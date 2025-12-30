@@ -4,7 +4,8 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { validateTeacherRegistration, validateLogin, validateStudent } = require('../middleware/validators');
-const { loginLimiter } = require('../middleware/rateLimiter'); // 💡 GÜVENLİK: Login rate limiter
+// Rate limiter kaldırıldı
+// const { loginLimiter } = require('../middleware/rateLimiter');
 
 /**
  * @swagger

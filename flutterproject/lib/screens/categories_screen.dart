@@ -10,6 +10,8 @@ import '../providers/content_provider.dart';
 import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
 import 'groups_screen.dart';
+import 'letter_groups_screen.dart';
+import 'statistics_screen.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -210,24 +212,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     return Scaffold(
       body: Stack(
         children: [
-          // Arka plan
+          // Arka plan - koyu mavi-gri (solid)
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  const Color(0xFF6C5CE7), // Açık mor
-                  const Color(0xFF4834D4), // Orta mor
-                  const Color(0xFF2D1B69), // Koyu mor
-                ],
-              ),
-            ),
-            child: Stack(
-              children: [
-                // Yıldızlar ve gezegenler arka plan
-                _buildBackgroundDecorations(),
-              ],
+            decoration: const BoxDecoration(
+              color: Color(0xFF2C3E50), // Koyu mavi-gri
             ),
           ),
           // Ana içerik
@@ -304,10 +292,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                                       childCount: categories.length,
                                     ),
                                   ),
-                          ),
-                          // Alt navigasyon için boşluk
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 70),
                           ),
                         ],
                       ),
@@ -509,22 +493,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
             colors: [
-              const Color(0xFFE91E63), // Pembe
-              const Color(0xFFAD1457), // Koyu pembe
+              const Color(0xFFE91E63), // Açık pembe
+              const Color(0xFF9C27B0), // Mor
             ],
           ),
         ),
-        child: Column(
-        children: [
-          // Üst satır: Geri ok ve başlık
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+        child: Row(
+          children: [
+            // Geri butonu
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
                 onPressed: () {
                   if (Navigator.canPop(context)) {
                     Navigator.of(context).pop();
@@ -532,133 +523,104 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                     Navigator.of(context).pushReplacementNamed('/student-selection');
                   }
                 },
-              ),
-              const Expanded(
-                child: Text(
-                  'İçindekiler',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // Alt başlık
-          const Padding(
-            padding: EdgeInsets.only(left: 16, bottom: 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Eğitim materyallerine kolayca erişin',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
+                padding: EdgeInsets.zero,
               ),
             ),
-          ),
-          // Öğrenci bilgisi ve sağ taraftaki bilgiler
-          Row(
-            children: [
-              // Sol: Öğrenci bilgisi (web sitesindeki gibi)
-              if (selectedStudent != null)
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFFE91E63),
-                              const Color(0xFFAD1457),
-                            ],
-                          ),
-                          shape: BoxShape.circle,
+            // Öğrenci bilgisi ve sağ taraftaki bilgiler
+            const SizedBox(width: 12),
+            // Sol: Öğrenci bilgisi (web sitesindeki gibi)
+            if (selectedStudent != null)
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFFE91E63),
+                            const Color(0xFFAD1457),
+                          ],
                         ),
-                        child: Center(
-                          child: Text(
-                            selectedStudent.firstName.isNotEmpty
-                                ? selectedStudent.firstName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          selectedStudent.firstName.isNotEmpty
+                              ? selectedStudent.firstName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              selectedStudent.fullName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            selectedStudent.fullName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Consumer<UserProfileProvider>(
+                            builder: (context, userProfileProvider, _) => Text(
+                              userProfileProvider.classroom?.name ?? 'Sınıf',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
-                            Consumer<UserProfileProvider>(
-                              builder: (context, userProfileProvider, _) => Text(
-                                userProfileProvider.classroom?.name ?? 'Sınıf',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              const SizedBox(width: 12),
-              // ActivityTimer Widget (Çocuklar için büyük ve çekici)
-              ActivityTimer(
-                onTimerUpdate: _onTimerUpdate,
-              ),
-              // Öğrenci Değiştir butonu
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/student-selection');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2ECC71), // Yeşil
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                icon: const Icon(Icons.arrow_forward, size: 14),
-                label: const Text(
-                  'Öğrenci Değiştir',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ],
+            const SizedBox(width: 12),
+            // ActivityTimer Widget (Çocuklar için büyük ve çekici)
+            ActivityTimer(
+              onTimerUpdate: _onTimerUpdate,
+            ),
+            // Öğrenci Değiştir butonu
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushReplacementNamed('/student-selection');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2ECC71), // Yeşil
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              icon: const Icon(Icons.arrow_forward, size: 14),
+              label: const Text(
+                'Öğrenci Değiştir',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -758,12 +720,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
     return GestureDetector(
       onTap: () {
-        // Kategori seçildiğinde gruplar ekranına git
+        // "Harf Grupları" kategorisi için özel ekran, diğerleri için normal gruplar ekranı
+        if (category.name.toLowerCase().contains('harf') || 
+            category.name.toLowerCase().contains('letter')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => LetterGroupsScreen(category: category),
+            ),
+          );
+        } else {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => GroupsScreen(category: category),
           ),
         );
+        }
       },
       child: AspectRatio(
         aspectRatio: 1.0,

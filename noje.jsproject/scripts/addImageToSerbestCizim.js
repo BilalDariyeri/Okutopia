@@ -68,3 +68,7 @@ async function addImageToSerbestCizim() {
 addImageToSerbestCizim();
 
 
+
+
+
+

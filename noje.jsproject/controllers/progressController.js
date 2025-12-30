@@ -1,6 +1,6 @@
 // controllers/progressController.js - İlerleme Takibi Controller'ı
 
-const Progress = require('../models/Progress');
+const Progress = require('../models/progress');
 const User = require('../models/user');
 const Activity = require('../models/activity');
 
