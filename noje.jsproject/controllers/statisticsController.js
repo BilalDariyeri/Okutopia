@@ -4,7 +4,7 @@ const StudentSession = require('../models/studentSession');
 const ReadingSession = require('../models/readingSession');
 const DailyStatistics = require('../models/dailyStatistics');
 const User = require('../models/user');
-const Progress = require('../models/Progress');
+const Progress = require('../models/progress');
 const Activity = require('../models/activity');
 const { sendStatisticsEmail } = require('../utils/emailService');
 const logger = require('../config/logger');
@@ -795,14 +795,25 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             });
         }
 
-        // Oturum aktiviteleri kontrolü
-        const activities = sessionActivities || [];
-        const totalDuration = totalDurationSeconds || 0;
+        // Oturum aktiviteleri kontrolü - SADECE tamamlanmış aktiviteleri filtrele
+        const allActivities = sessionActivities || [];
+        const completedActivities = allActivities.filter(activity => {
+            // isCompleted === true olan aktiviteleri al (varsayılan olarak true kabul et)
+            return activity.isCompleted !== false; // undefined veya true ise dahil et
+        });
+        
+        // Toplam süreyi aktivitelerin sürelerinden hesapla (aktivite sürelerinin toplamı)
+        const calculatedTotalDuration = completedActivities.reduce((sum, activity) => {
+            return sum + (activity.durationSeconds || 0);
+        }, 0);
+        
+        // Frontend'den gelen totalDurationSeconds'i kullan, ama eğer aktivitelerin toplamı daha büyükse onu kullan
+        const totalDuration = Math.max(calculatedTotalDuration, totalDurationSeconds || 0);
 
-        if (activities.length === 0) {
+        if (completedActivities.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Bu oturumda henüz aktivite tamamlanmamış.'
+                message: 'Bu oturumda henüz tamamlanmış aktivite bulunamadı.'
             });
         }
 
@@ -821,8 +832,8 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             }
         };
 
-        // Aktivite listesini formatla
-        const activitiesListHtml = activities.map((activity, index) => {
+        // Aktivite listesini formatla (SADECE tamamlanmış aktiviteler)
+        const activitiesListHtml = completedActivities.map((activity, index) => {
             const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
             const duration = activity.durationSeconds || 0;
             const successStatus = activity.successStatus || '';
@@ -837,7 +848,7 @@ exports.sendSessionStatisticsEmail = async (req, res) => {
             `;
         }).join('');
 
-        const activitiesListText = activities.map((activity, index) => {
+        const activitiesListText = completedActivities.map((activity, index) => {
             const activityTitle = activity.activityTitle || 'Bilinmeyen Aktivite';
             const duration = activity.durationSeconds || 0;
             const successStatus = activity.successStatus || '';
@@ -927,8 +938,8 @@ ${activitiesListText}
             totalReadingTime: 0,
             totalWordsRead: 0,
             averageReadingSpeed: 0,
-            completedActivities: activities.length,
-            activities: activities.map((act, idx) => ({
+            completedActivities: completedActivities.length,
+            activities: completedActivities.map((act, idx) => ({
                 activityId: { title: act.activityTitle },
                 title: act.activityTitle,
                 score: 0,
@@ -945,12 +956,15 @@ ${activitiesListText}
 
         // 💡 VERİTABANI OPTİMİZASYONU: Son oturum istatistiklerini User modeline kaydet (OVERWRITE)
         // Frontend'den gelen oturum verilerini kullanarak lastSessionStats'ı güncelle
-        const lastSessionActivities = activities.map(activity => ({
+        // SADECE tamamlanmış aktiviteleri kaydet
+        const lastSessionActivities = completedActivities.map(activity => ({
             activityId: activity.activityId,
             activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
             durationSeconds: activity.durationSeconds || 0,
             completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
-            successStatus: activity.successStatus || null
+            successStatus: activity.successStatus || null,
+            isCompleted: activity.isCompleted !== false, // Tamamlanma durumu
+            correctAnswerCount: activity.correctAnswerCount || 0 // Doğru cevap sayısı
         }));
 
         // User modelindeki lastSessionStats'ı güncelle (OVERWRITE - append değil)
@@ -966,7 +980,7 @@ ${activitiesListText}
         logger.info('Oturum bazlı istatistik email gönderildi ve lastSessionStats güncellendi', {
             studentId: studentId,
             parentEmail: emailToSend,
-            activityCount: activities.length,
+            activityCount: completedActivities.length,
             totalDuration: totalDuration
         });
 
@@ -979,7 +993,14 @@ ${activitiesListText}
         logger.error('Oturum bazlı email gönderme hatası', {
             studentId: studentId,
             error: error.message,
-            stack: error.stack
+            stack: error.stack,
+            errorCode: error.code,
+            errorResponse: error.response,
+            requestBody: {
+                parentEmail: req.body.parentEmail,
+                sessionActivitiesCount: req.body.sessionActivities?.length || 0,
+                totalDurationSeconds: req.body.totalDurationSeconds
+            }
         });
         
         let errorMessage = 'Email gönderilemedi.';
@@ -991,6 +1012,12 @@ ${activitiesListText}
         } else if (error.message && error.message.includes('kimlik doğrulama')) {
             errorMessage = 'Email kimlik doğrulama hatası. Gmail için App Password kullanılmalıdır.';
             statusCode = 500;
+        } else if (error.code === 'EAUTH') {
+            errorMessage = 'Email kimlik doğrulama hatası. EMAIL_USER ve EMAIL_PASS bilgilerini kontrol edin.';
+            statusCode = 500;
+        } else if (error.code === 'ECONNECTION') {
+            errorMessage = 'Email sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+            statusCode = 500;
         } else {
             errorMessage = error.message || 'Email gönderilemedi.';
             statusCode = 500;
@@ -999,7 +1026,8 @@ ${activitiesListText}
         res.status(statusCode).json({
             success: false,
             message: errorMessage,
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Email gönderme hatası'
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Email gönderme hatası',
+            errorCode: error.code || 'UNKNOWN_ERROR'
         });
     }
 };
@@ -1025,7 +1053,14 @@ exports.startReading = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,
@@ -1258,7 +1293,14 @@ exports.getTeacherStudents = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,
@@ -1353,7 +1395,14 @@ exports.getStudentStatisticsForTeacher = async (req, res) => {
         const token = authHeader.substring(7);
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Sunucu yapılandırma hatası. Lütfen sistem yöneticisine başvurun.'
+                });
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             return res.status(401).json({
                 success: false,

@@ -8,7 +8,7 @@ const Group = require('../models/group');
 const Lesson = require('../models/lesson');
 const Activity = require('../models/activity');
 const MiniQuestion = require('../models/miniQuestion');
-const Progress = require('../models/Progress');
+const Progress = require('../models/progress');
 const jwt = require('jsonwebtoken');
 const { QuestionStrategyFactory } = require('../utils/questionStrategies');
 const logger = require('../config/logger');
@@ -47,9 +47,13 @@ exports.getQuestionTypes = async (req, res) => {
 
 // JWT token oluşturma yardımcı fonksiyonu
 const generateToken = (userId) => {
+    // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+    if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable tanımlı değil!');
+    }
     return jwt.sign(
         { userId },
-        process.env.JWT_SECRET || 'fallback-secret-key-change-in-production',
+        process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRE || '30d' }
     );
 };

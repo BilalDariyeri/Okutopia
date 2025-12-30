@@ -4,7 +4,8 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { validateTeacherRegistration, validateLogin, validateStudent } = require('../middleware/validators');
-const { loginLimiter } = require('../middleware/rateLimiter'); // 💡 GÜVENLİK: Login rate limiter
+// Rate limiter kaldırıldı
+// const { loginLimiter } = require('../middleware/rateLimiter');
 
 /**
  * @swagger
@@ -136,7 +137,8 @@ const { loginLimiter } = require('../middleware/rateLimiter'); // 💡 GÜVENLİ
  *         description: Geçersiz e-posta veya şifre.
  */
 // 💡 GÜVENLİK: Login için özel rate limiter (15 dakikada 5 deneme)
-router.post('/login', loginLimiter, validateLogin, userController.login);
+// 💡 DEV: Rate limiting devre dışı
+router.post('/login', /* loginLimiter, */ validateLogin, userController.login);
 
 // Register endpoint - Rate limit kaldırıldı (sadece genel rate limit geçerli)
 router.post('/register/teacher', validateTeacherRegistration, userController.registerTeacherAndCreateClass);

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart';
+import '../providers/student_selection_provider.dart';
+import '../providers/statistics_provider.dart';
 import '../services/statistics_service.dart';
 import '../services/current_session_service.dart';
+import '../models/student_model.dart';
+import '../utils/debounce_throttle.dart';
 import 'dart:async';
 
 class StatisticsScreen extends StatefulWidget {
@@ -14,64 +18,71 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   final StatisticsService _statisticsService = StatisticsService();
-  final CurrentSessionService _sessionService = CurrentSessionService();
   final TextEditingController _emailController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final _debouncer = Debouncer(delay: const Duration(milliseconds: 500));
   
-  bool _isLoading = true;
   bool _isSendingEmail = false;
   String? _errorMessage;
-  
-  List<SessionActivity> _sessionActivities = [];
-  Duration _sessionTotalDuration = Duration.zero;
-  DateTime? _sessionStartTime;
 
   @override
   void initState() {
     super.initState();
-    _loadStatistics();
+    // Cache-First: Provider'dan istatistikleri yükle (anında gösterir)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadStatisticsFromProvider();
+    });
   }
 
   @override
   void dispose() {
     _emailController.dispose();
     _scrollController.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
-  Future<void> _loadStatistics() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+  /// Cache-First: Provider'dan istatistikleri yükle (Zero-Loading UI)
+  Future<void> _loadStatisticsFromProvider() async {
+    if (!mounted) return;
+    
+    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) {
       setState(() {
-        _isLoading = false;
         _errorMessage = 'Lütfen önce bir öğrenci seçin.';
       });
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // Provider'dan cache'lenmiş veriyi kontrol et
+    final cachedStats = statisticsProvider.getStatistics(selectedStudent.id);
+    final cachedActivities = statisticsProvider.getSessionActivities(selectedStudent.id);
+    
+    if (cachedStats != null && cachedActivities != null) {
+      // Cache'de veri var, anında göster (loading yok!)
+      setState(() {
+        _errorMessage = null;
+        // Email controller'a varsayılan email'i yükle
+        if (cachedStats['student'] != null && cachedStats['student']['parentEmail'] != null) {
+          _emailController.text = cachedStats['student']['parentEmail'];
+        }
+      });
+      // Arka planda refresh yapılacak (Provider içinde)
+      return;
+    }
 
+    // Cache yoksa yükle (ilk açılış)
     try {
-      // Backend'den öğrenci bilgilerini getir (email için)
-      final stats = await _statisticsService.getStudentStatistics(selectedStudent.id);
-      
-      // Oturum verilerini getir
-      _sessionActivities = _sessionService.getSessionActivities(selectedStudent.id);
-      _sessionTotalDuration = _sessionService.getSessionTotalDuration(selectedStudent.id);
-      _sessionStartTime = _sessionService.getSessionStartTime(selectedStudent.id);
-      
+      await statisticsProvider.loadStatistics(selectedStudent.id);
       if (!mounted) return;
       
+      final stats = statisticsProvider.getStatistics(selectedStudent.id);
       setState(() {
-        _isLoading = false;
-        
-        // Email controller'a varsayılan email'i yükle
-        if (stats['student'] != null && stats['student']['parentEmail'] != null) {
+        _errorMessage = null;
+        if (stats != null && stats['student'] != null && stats['student']['parentEmail'] != null) {
           _emailController.text = stats['student']['parentEmail'];
         }
       });
@@ -79,14 +90,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
       });
     }
   }
 
   Future<void> _sendEmailReport() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,8 +131,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       return;
     }
 
+    // Provider'dan oturum verilerini al
+    final statisticsProvider = Provider.of<StatisticsProvider>(context, listen: false);
+    final sessionActivities = statisticsProvider.getSessionActivities(selectedStudent.id) ?? [];
+    final sessionTotalDuration = statisticsProvider.getSessionDuration(selectedStudent.id) ?? Duration.zero;
+
     // Oturum aktiviteleri kontrolü
-    if (_sessionActivities.isEmpty) {
+    if (sessionActivities.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Bu oturumda henüz aktivite tamamlanmamış.'),
@@ -137,14 +152,31 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     });
 
     try {
-      // Oturum verilerini hazırla
-      final sessionActivitiesData = _sessionActivities.map((activity) {
+      // Oturum verilerini hazırla - SADECE tamamlanmış aktiviteleri filtrele
+      final completedActivities = sessionActivities.where((activity) => activity.isCompleted).toList();
+      
+      if (completedActivities.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tamamlanmış aktivite bulunamadı. Rapor gönderilemez.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSendingEmail = false;
+        });
+        return;
+      }
+      
+      final sessionActivitiesData = completedActivities.map((activity) {
         return {
           'activityId': activity.activityId,
           'activityTitle': activity.activityTitle,
           'durationSeconds': activity.durationSeconds,
           'successStatus': activity.successStatus,
           'completedAt': activity.completedAt.toIso8601String(),
+          'isCompleted': activity.isCompleted,
+          'correctAnswerCount': activity.correctAnswerCount,
         };
       }).toList();
 
@@ -153,7 +185,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         selectedStudent.id,
         parentEmail: email,
         sessionActivities: sessionActivitiesData,
-        totalDurationSeconds: _sessionTotalDuration.inSeconds,
+        totalDurationSeconds: sessionTotalDuration.inSeconds,
       );
 
       if (!mounted) return;
@@ -167,8 +199,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
         );
         
-        // İstatistikleri yenile
-        await _loadStatistics();
+        // İstatistikleri yenile (cache-first)
+        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
+        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
       } else {
         throw Exception(result['message'] ?? 'Email gönderilemedi.');
       }
@@ -190,20 +223,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-    
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    
-    if (hours > 0) {
-      return '${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(seconds)}';
-    } else {
-      return '${twoDigits(minutes)}:${twoDigits(seconds)}';
-    }
-  }
-
   String _formatSessionStartTime(DateTime? startTime) {
     if (startTime == null) return 'Bilinmiyor';
     
@@ -221,19 +240,31 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final selectedStudent = authProvider.selectedStudent;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
+    
+    return Consumer<StatisticsProvider>(
+      builder: (context, statisticsProvider, child) {
+        // Cache-First: Provider'dan verileri al (anında gösterilir)
+        final sessionActivities = (selectedStudent != null
+            ? statisticsProvider.getSessionActivities(selectedStudent.id) ?? []
+            : []) as List<SessionActivity>;
+        final sessionStartTime = selectedStudent != null
+            ? statisticsProvider.getSessionStartTime(selectedStudent.id)
+            : null;
+        
+        return _buildScaffold(context, sessionActivities, sessionStartTime, selectedStudent);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, List<SessionActivity> sessionActivities, DateTime? sessionStartTime, Student? selectedStudent) {
+    final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
 
     return Scaffold(
       backgroundColor: const Color(0xFF6C5CE7),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : _errorMessage != null
+        child: _errorMessage != null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -251,7 +282,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton(
-                          onPressed: _loadStatistics,
+                          onPressed: _loadStatisticsFromProvider,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF4834D4),
@@ -359,7 +390,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              authProvider.classroom?.name ?? 'Sınıf',
+                                              userProfileProvider.classroom?.name ?? 'Sınıf',
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 color: Colors.grey[600],
@@ -413,10 +444,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
-                                          if (_sessionStartTime != null) ...[
+                                          if (sessionStartTime != null) ...[
                                             const SizedBox(height: 4),
                                             Text(
-                                              _formatSessionStartTime(_sessionStartTime),
+                                              _formatSessionStartTime(sessionStartTime),
                                               style: TextStyle(
                                                 color: Colors.white.withValues(alpha: 0.9),
                                                 fontSize: 12,
@@ -432,21 +463,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
                               const SizedBox(height: 16),
 
-                              // Toplam Süre Kartı (Oturum)
-                              _buildStatCard(
-                                icon: Icons.timer,
-                                title: 'Oturum Toplam Süresi',
-                                value: _formatDuration(_sessionTotalDuration),
-                                color: const Color(0xFF4ECDC4),
-                                subtitle: _sessionActivities.isNotEmpty
-                                    ? '${_sessionActivities.length} aktivite tamamlandı'
-                                    : 'Henüz aktivite yok',
-                              ),
-
-                              const SizedBox(height: 12),
-
                               // Oturum Aktiviteleri Listesi
-                              if (_sessionActivities.isNotEmpty) ...[
+                              if (sessionActivities.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Container(
                                   padding: const EdgeInsets.all(16),
@@ -483,7 +501,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 16),
-                                      ..._sessionActivities.reversed.map((activity) {
+                                      ...sessionActivities.reversed.map((activity) {
                                         return Padding(
                                           padding: const EdgeInsets.only(bottom: 12),
                                           child: Container(
@@ -650,7 +668,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(
-                              onPressed: _isSendingEmail ? null : _sendEmailReport,
+                              onPressed: _isSendingEmail ? null : () {
+                                _debouncer.call(() {
+                                  _sendEmailReport();
+                                });
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF4ECDC4),
                                 foregroundColor: Colors.white,
@@ -696,83 +718,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       ),
                     ],
                   ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color color,
-    String? subtitle,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color,
-            color.withValues(alpha: 0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: Colors.white, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import '../models/user_model.dart';
+import '../utils/app_logger.dart';
 
 class AuthService {
   final Dio _dio;
@@ -19,6 +20,8 @@ class AuthService {
   // Öğretmen girişi
   Future<LoginResponse> login(String email, String password) async {
     try {
+      AppLogger.info('Attempting login for email: ${email.substring(0, email.indexOf('@'))}...');
+      
       final response = await _dio.post(
         '/users/login',
         data: {
@@ -28,8 +31,10 @@ class AuthService {
       );
 
       if (response.statusCode == 200 && response.data != null) {
+        AppLogger.info('Login successful for user: ${response.data?['user']?['email'] ?? 'unknown'}');
         return LoginResponse.fromJson(response.data as Map<String, dynamic>);
       } else {
+        AppLogger.warning('Login failed - unexpected response: ${response.statusCode}');
         throw Exception('Giriş başarısız: ${response.data?['message'] ?? 'Bilinmeyen hata'}');
       }
     } on DioException catch (e) {
@@ -49,19 +54,25 @@ class AuthService {
           errorMessage = errorData;
         }
         
+        AppLogger.warning('Login failed - server error: $errorMessage');
         throw Exception(errorMessage);
       } else if (e.type == DioExceptionType.connectionTimeout ||
                  e.type == DioExceptionType.receiveTimeout) {
+        AppLogger.error('Login failed - timeout', e);
         throw Exception('Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin.');
       } else if (e.type == DioExceptionType.connectionError) {
+        AppLogger.error('Login failed - connection error', e);
         throw Exception('Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin.');
       } else {
+        AppLogger.error('Login failed - network error', e);
         throw Exception('Bağlantı hatası: ${e.message ?? 'Bilinmeyen hata'}');
       }
     } catch (e) {
       if (e is Exception) {
+        AppLogger.error('Login failed - exception', e);
         rethrow;
       }
+      AppLogger.error('Login failed - unexpected error', e);
       throw Exception('Giriş sırasında hata oluştu: ${e.toString()}');
     }
   }
@@ -74,6 +85,8 @@ class AuthService {
     required String password,
   }) async {
     try {
+      AppLogger.info('Attempting teacher registration for: $firstName $lastName ($email)');
+      
       final response = await _dio.post(
         '/users/register/teacher',
         data: {
@@ -85,8 +98,10 @@ class AuthService {
       );
 
       if (response.statusCode == 201 && response.data != null) {
+        AppLogger.info('Teacher registration successful for: $email');
         return RegisterResponse.fromJson(response.data as Map<String, dynamic>);
       } else {
+        AppLogger.warning('Registration failed - unexpected response: ${response.statusCode}');
         throw Exception('Kayıt başarısız: ${response.data?['message'] ?? 'Bilinmeyen hata'}');
       }
     } on DioException catch (e) {
@@ -108,19 +123,25 @@ class AuthService {
           errorMessage = errorData;
         }
         
+        AppLogger.warning('Registration failed - server error: $errorMessage');
         throw Exception(errorMessage);
       } else if (e.type == DioExceptionType.connectionTimeout ||
                  e.type == DioExceptionType.receiveTimeout) {
+        AppLogger.error('Registration failed - timeout', e);
         throw Exception('Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin.');
       } else if (e.type == DioExceptionType.connectionError) {
+        AppLogger.error('Registration failed - connection error', e);
         throw Exception('Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin.');
       } else {
+        AppLogger.error('Registration failed - network error', e);
         throw Exception('Bağlantı hatası: ${e.message ?? 'Bilinmeyen hata'}');
       }
     } catch (e) {
       if (e is Exception) {
+        AppLogger.error('Registration failed - exception', e);
         rethrow;
       }
+      AppLogger.error('Registration failed - unexpected error', e);
       throw Exception('Kayıt sırasında hata oluştu: ${e.toString()}');
     }
   }

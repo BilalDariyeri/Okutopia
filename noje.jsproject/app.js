@@ -48,7 +48,12 @@ const corsOptions = {
     origin: process.env.CORS_ORIGIN 
         ? process.env.CORS_ORIGIN.split(',') // Birden fazla origin için
         : (process.env.NODE_ENV === 'production' 
-            ? false // Production'da origin belirtilmeli
+            ? (() => {
+                // 🔒 SECURITY: Production'da CORS_ORIGIN zorunlu
+                console.error('❌ KRİTİK GÜVENLİK HATASI: Production modunda CORS_ORIGIN environment variable tanımlı değil!');
+                // Production'da varsayılan olarak boş array döndür (hiçbir origin'e izin verme)
+                return [];
+            })()
             : true), // Development'ta tüm origin'lere izin
     credentials: true,
     optionsSuccessStatus: 200
@@ -57,6 +62,7 @@ app.use(cors(corsOptions));
 
 // 💡 GÜVENLİK: Rate limiting (DDoS koruması) - Health check ve admin login hariç tüm endpoint'ler için
 app.use('/api/', (req, res, next) => {
+    // 🔒 SECURITY: Rate limiting aktif
     // Health check endpoint'lerini rate limit'ten muaf tut
     if (req.path.startsWith('/health')) {
         return next();
@@ -65,6 +71,7 @@ app.use('/api/', (req, res, next) => {
     if (req.path === '/admin/login') {
         return next();
     }
+    // Rate limiter aktif - DDoS koruması
     return generalLimiter(req, res, next);
 });
 

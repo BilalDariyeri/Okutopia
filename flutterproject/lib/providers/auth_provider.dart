@@ -1,63 +1,59 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../models/user_model.dart';
-import '../models/student_model.dart';
 import '../services/auth_service.dart';
+import '../services/token_service.dart';
+import 'user_profile_provider.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-  final SharedPreferences _prefs;
+  UserProfileProvider? _userProfileProvider;
 
-  User? _user;
   String? _token;
-  Classroom? _classroom;
-  Student? _selectedStudent;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isInitialized = false;
 
-  AuthProvider(this._prefs) {
-    // Storage'dan kullanıcı bilgilerini yükle (async işlem)
-    _loadUserFromStorage();
+  void setUserProfileProvider(UserProfileProvider provider) {
+    _userProfileProvider = provider;
   }
 
-  // Getters
-  User? get user => _user;
+  AuthProvider() {
+    // Initialize authentication state from storage
+    _initializeAuthState();
+  }
+
+  Future<void> _initializeAuthState() async {
+    try {
+      await _loadUserFromStorage();
+    } catch (e) {
+      debugPrint('Auth initialization error: $e');
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
+  }
+
   String? get token => _token;
-  Classroom? get classroom => _classroom;
-  Student? get selectedStudent => _selectedStudent;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _token != null && _user != null;
+  bool get isInitialized => _isInitialized;
+  bool get isAuthenticated => _isInitialized && _token != null && _userProfileProvider?.user != null;
 
-  // Kullanıcı bilgilerini storage'dan yükle
   Future<void> _loadUserFromStorage() async {
     try {
-      _token = await _secureStorage.read(key: 'token');
-      final userJson = _prefs.getString('user');
-      if (userJson != null && _token != null) {
-        // JSON string'i parse et
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        _user = User.fromJson(userMap);
-        
-        // Seçili öğrenciyi yükle
-        final studentJson = _prefs.getString('selectedStudent');
-        if (studentJson != null) {
-          try {
-            final studentMap = jsonDecode(studentJson) as Map<String, dynamic>;
-            _selectedStudent = Student.fromJson(studentMap);
-          } catch (e) {
-            debugPrint('Seçili öğrenci yükleme hatası: $e');
-          }
-        }
-        
-        notifyListeners();
+      _token = await TokenService.getToken();
+      
+      if (_token == null) {
+        await _clearStoredUserData();
+        return;
       }
     } catch (e) {
-      debugPrint('Storage yükleme hatası: $e');
+      await _clearStoredUserData();
     }
+  }
+
+  Future<void> _clearStoredUserData() async {
+    await TokenService.clearAll();
+    _token = null;
   }
 
   // Giriş yap
@@ -71,20 +67,11 @@ class AuthProvider with ChangeNotifier {
 
       if (response.success) {
         _token = response.token;
-        _user = response.user;
-        _classroom = response.classroom;
-
-        // Debug: Classroom bilgisini kontrol et
-        debugPrint('🔍 Login başarılı:');
-        debugPrint('  - User: ${_user?.fullName}');
-        debugPrint('  - Classroom: ${_classroom?.id} - ${_classroom?.name}');
-        debugPrint('  - Classroom null mu?: ${_classroom == null}');
-
-        // Token'ı güvenli storage'a kaydet
-        await _secureStorage.write(key: 'token', value: _token);
+        await TokenService.cacheToken(_token!);
         
-        // Kullanıcı bilgilerini shared preferences'a kaydet
-        await _prefs.setString('user', jsonEncode(response.user.toJson()));
+        if (_userProfileProvider != null) {
+          await _userProfileProvider!.setUser(response.user, classroom: response.classroom);
+        }
 
         _isLoading = false;
         notifyListeners();
@@ -124,14 +111,11 @@ class AuthProvider with ChangeNotifier {
 
       if (response.success) {
         _token = response.token;
-        _user = response.teacher;
-        _classroom = response.classroom;
-
-        // Token'ı güvenli storage'a kaydet
-        await _secureStorage.write(key: 'token', value: _token);
+        await TokenService.cacheToken(_token!);
         
-        // Kullanıcı bilgilerini shared preferences'a kaydet
-        await _prefs.setString('user', jsonEncode(response.teacher.toJson()));
+        if (_userProfileProvider != null) {
+          await _userProfileProvider!.setUser(response.teacher, classroom: response.classroom);
+        }
 
         _isLoading = false;
         notifyListeners();
@@ -150,37 +134,13 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Öğrenci seç
-  void setSelectedStudent(Student student) {
-    _selectedStudent = student;
-    // Seçili öğrenciyi SharedPreferences'a kaydet
-    _prefs.setString('selectedStudent', jsonEncode(student.toJson()));
-    notifyListeners();
-  }
-
-  // Seçili öğrenciyi temizle
-  void clearSelectedStudent() {
-    _selectedStudent = null;
-    _prefs.remove('selectedStudent');
-    notifyListeners();
-  }
-
-  // Çıkış yap
   Future<void> logout() async {
     _token = null;
-    _user = null;
-    _classroom = null;
-    _selectedStudent = null;
     _errorMessage = null;
-
-    await _secureStorage.delete(key: 'token');
-    await _prefs.remove('user');
-    await _prefs.remove('selectedStudent');
-
+    await TokenService.clearAll();
     notifyListeners();
   }
 
-  // Hata mesajını temizle
   void clearError() {
     _errorMessage = null;
     notifyListeners();

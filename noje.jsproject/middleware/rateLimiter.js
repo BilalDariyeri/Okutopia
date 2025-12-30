@@ -4,9 +4,10 @@ const rateLimit = require('express-rate-limit');
 const logger = require('../config/logger');
 
 // Genel API rate limiter (tüm endpoint'ler için)
+// 🔒 SECURITY: Rate limiting aktif - DDoS koruması
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 100, // Her IP için 15 dakikada maksimum 100 istek
+    max: process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 100, // Environment'dan al veya varsayılan 100
     message: {
         success: false,
         message: 'Çok fazla istek gönderildi. Lütfen 15 dakika sonra tekrar deneyin.'
@@ -27,9 +28,10 @@ const generalLimiter = rateLimit({
 });
 
 // Login endpoint için özel rate limiter (admin login için daha esnek)
+// 🔒 SECURITY: Rate limiting aktif - Brute force koruması
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 30, // Her IP için 15 dakikada maksimum 30 login denemesi (artırıldı)
+    max: process.env.RATE_LIMIT_LOGIN_MAX ? parseInt(process.env.RATE_LIMIT_LOGIN_MAX) : 5, // Environment'dan al veya varsayılan 5
     message: {
         success: false,
         message: 'Çok fazla giriş denemesi. Lütfen 15 dakika sonra tekrar deneyin.'
@@ -51,9 +53,10 @@ const loginLimiter = rateLimit({
 });
 
 // Register endpoint için özel rate limiter
+// 🔒 SECURITY: Rate limiting aktif - Spam koruması
 const registerLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 saat
-    max: 3, // Her IP için 1 saatte maksimum 3 kayıt
+    max: process.env.RATE_LIMIT_REGISTER_MAX ? parseInt(process.env.RATE_LIMIT_REGISTER_MAX) : 3, // Environment'dan al veya varsayılan 3
     message: {
         success: false,
         message: 'Çok fazla kayıt denemesi. Lütfen 1 saat sonra tekrar deneyin.'
@@ -72,9 +75,10 @@ const registerLimiter = rateLimit({
 });
 
 // API endpoint'leri için rate limiter (daha yüksek limit)
+// 🔒 SECURITY: Rate limiting aktif - API abuse koruması
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 dakika
-    max: 200, // Authenticated kullanıcılar için daha yüksek limit
+    max: process.env.RATE_LIMIT_API_MAX ? parseInt(process.env.RATE_LIMIT_API_MAX) : 200, // Environment'dan al veya varsayılan 200
     message: {
         success: false,
         message: 'API rate limit aşıldı. Lütfen daha sonra tekrar deneyin.'

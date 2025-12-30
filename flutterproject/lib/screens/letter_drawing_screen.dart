@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/student_selection_provider.dart';
+import '../utils/app_logger.dart';
 
 class LetterDrawingScreen extends StatefulWidget {
   final Activity activity;
@@ -34,6 +39,10 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
   
   final AudioPlayer _audioPlayer = AudioPlayer();
   StreamSubscription? _playerCompleteSubscription;
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
 
   late AnimationController _arrowAnimationController;
   final List<Offset> _arrowPositions = [];
@@ -105,6 +114,7 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
     });
 
     _updateArrowPositions();
+    _startActivityTracking();
     
     // Başlangıç sesini çal
     final question = widget.questions[widget.currentQuestionIndex];
@@ -125,7 +135,50 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
     _planet4Controller.dispose();
     _playerCompleteSubscription?.cancel();
     _audioPlayer.dispose();
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    if (!mounted) return;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<StudentSelectionProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
+      );
+      
+      // Oturum servisine de ekle (TAMAMLANMIŞ olarak işaretle)
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus ?? (_showSuccess ? 'Başarılı' : 'Tamamlandı'),
+        isCompleted: true, // Aktivite başarıyla tamamlandı
+        correctAnswerCount: 0, // Bu aktivite tipinde doğru cevap sayısı yok
+      );
+    }
   }
 
   void _updateArrowPositions() {
@@ -190,7 +243,7 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      debugPrint('Ses çalınamadı: $e');
+      AppLogger.error('Ses çalınamadı', e);
     }
   }
 
@@ -554,6 +607,10 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
                                             ? CachedNetworkImage(
                                                 imageUrl: _getFileUrl(imageFileId),
                                                 fit: BoxFit.contain,
+                                                memCacheWidth: 800,
+                                                memCacheHeight: 800,
+                                                maxWidthDiskCache: 800,
+                                                maxHeightDiskCache: 800,
                                                 placeholder: (context, url) =>
                                                     const SizedBox(),
                                                 errorWidget: (context, url, error) =>

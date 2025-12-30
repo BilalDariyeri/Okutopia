@@ -184,7 +184,7 @@ class _LessonsScreenState extends State<LessonsScreen> with TickerProviderStateM
                         slivers: [
                           // Üst Header
                           SliverAppBar(
-                            expandedHeight: 120,
+                            expandedHeight: MediaQuery.of(context).size.height * 0.15, // Responsive height (~100-120px)
                             floating: false,
                             pinned: true,
                             backgroundColor: Colors.transparent,
@@ -198,9 +198,9 @@ class _LessonsScreenState extends State<LessonsScreen> with TickerProviderStateM
                             flexibleSpace: FlexibleSpaceBar(
                               title: Text(
                                 widget.group.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 18,
+                                  fontSize: MediaQuery.of(context).size.width * 0.045, // Responsive font size (~16-18px)
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -209,15 +209,18 @@ class _LessonsScreenState extends State<LessonsScreen> with TickerProviderStateM
                           ),
                           // Ana içerik
                           SliverPadding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: MediaQuery.of(context).size.width * 0.04, // Responsive padding (~12-16px)
+                              vertical: MediaQuery.of(context).size.height * 0.02, // Responsive padding (~16px)
+                            ),
                             sliver: _lessons.isEmpty
                                 ? SliverToBoxAdapter(child: _buildEmptyState())
                                 : SliverGrid(
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 2, // 2 sütun
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.9,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: MediaQuery.of(context).size.width < 400 ? 0.85 : 0.9, // Küçük ekranlarda daha kompakt
                                     ),
                                     delegate: SliverChildBuilderDelegate(
                                       (context, index) {
@@ -419,26 +422,28 @@ class _LessonsScreenState extends State<LessonsScreen> with TickerProviderStateM
 
   Widget _buildEmptyState() {
     return Container(
-      padding: const EdgeInsets.all(40),
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.08), // Responsive padding (~30px)
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16), // Standart BorderRadius
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.book_outlined,
-            size: 64,
+            size: MediaQuery.of(context).size.width * 0.15, // Responsive icon size (~56px)
             color: Colors.white.withValues(alpha: 0.5),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.02), // Responsive spacing (~16px)
           Text(
             'Bu grupta henüz ders eklenmemiş',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 16,
+              fontSize: MediaQuery.of(context).size.width * 0.04, // Responsive font size (~14-15px)
               fontWeight: FontWeight.w400,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -457,72 +462,77 @@ class _LessonsScreenState extends State<LessonsScreen> with TickerProviderStateM
           ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2C), // Koyu gri
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Ders İkonu
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.book,
-                color: Colors.white,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 14),
-            // Ders İsmi
-            Text(
-              lesson.title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (lesson.targetContent.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                lesson.targetContent,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      child: AspectRatio(
+        aspectRatio: 1.0,
+        child: Container(
+          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04), // Responsive padding (~12-16px)
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C2C2C), // Koyu gri
+            borderRadius: BorderRadius.circular(16), // Standart BorderRadius
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
-          ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Ders İkonu - Responsive boyutlandırma
+              Container(
+                width: MediaQuery.of(context).size.width * 0.12, // ~48px küçük ekranlarda
+                height: MediaQuery.of(context).size.width * 0.12,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12), // Standart BorderRadius
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.book,
+                  color: Colors.white,
+                  size: MediaQuery.of(context).size.width * 0.06, // ~24px küçük ekranlarda
+                ),
+              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015), // Responsive spacing (~10px)
+              // Ders İsmi
+              Expanded(
+                child: Text(
+                  lesson.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (lesson.targetContent.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  lesson.targetContent,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

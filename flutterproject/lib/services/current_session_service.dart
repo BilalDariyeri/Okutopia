@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Mevcut oturum için aktivite takibi servisi
 /// Öğrenci giriş yaptığından beri yapılan aktiviteleri hafızada tutar
 class CurrentSessionService {
@@ -26,7 +24,6 @@ class CurrentSessionService {
     _sessionData[studentId] = [];
     _sessionStartTimes[studentId] = DateTime.now();
     _sessionTotalDurations[studentId] = Duration.zero;
-    debugPrint('✅ Oturum başlatıldı: $studentId');
   }
 
   /// Oturum toplam süresini güncelle (ActivityTimer'dan)
@@ -45,6 +42,8 @@ class CurrentSessionService {
     required String activityTitle,
     required int durationSeconds,
     String? successStatus,
+    bool isCompleted = false, // Aktivite başarıyla tamamlandı mı?
+    int correctAnswerCount = 0, // Doğru cevap sayısı
   }) {
     if (!_sessionData.containsKey(studentId)) {
       // Oturum başlatılmamışsa başlat
@@ -57,10 +56,11 @@ class CurrentSessionService {
       durationSeconds: durationSeconds,
       completedAt: DateTime.now(),
       successStatus: successStatus,
+      isCompleted: isCompleted,
+      correctAnswerCount: correctAnswerCount,
     );
 
     _sessionData[studentId]!.add(activity);
-    debugPrint('✅ Aktivite eklendi: $activityTitle - $durationSeconds s');
   }
 
   /// Oturum verilerini getir
@@ -96,15 +96,12 @@ class CurrentSessionService {
     _sessionData.remove(studentId);
     _sessionStartTimes.remove(studentId);
     _sessionTotalDurations.remove(studentId);
-    debugPrint('✅ Oturum temizlendi: $studentId');
   }
 
-  /// Tüm oturumları temizle
   void clearAllSessions() {
     _sessionData.clear();
     _sessionStartTimes.clear();
     _sessionTotalDurations.clear();
-    debugPrint('✅ Tüm oturumlar temizlendi');
   }
 }
 
@@ -115,6 +112,8 @@ class SessionActivity {
   final int durationSeconds; // Saniye cinsinden
   final DateTime completedAt;
   final String? successStatus; // Örn: "Başarılı", "Tamamlandı", vb.
+  final bool isCompleted; // Aktivite başarıyla tamamlandı mı?
+  final int correctAnswerCount; // Doğru cevap sayısı
 
   SessionActivity({
     required this.activityId,
@@ -122,6 +121,8 @@ class SessionActivity {
     required this.durationSeconds,
     required this.completedAt,
     this.successStatus,
+    this.isCompleted = false, // Varsayılan olarak false
+    this.correctAnswerCount = 0, // Varsayılan olarak 0
   });
 
   Duration get duration => Duration(seconds: durationSeconds);

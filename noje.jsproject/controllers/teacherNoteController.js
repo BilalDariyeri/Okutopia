@@ -15,7 +15,11 @@ const getTeacherIdFromToken = (req) => {
     
     const token = authHeader.substring(7);
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+        // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+        if (!process.env.JWT_SECRET) {
+            return null; // Hata durumunda null döndür
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         return decoded.userId;
     } catch (error) {
         return null;

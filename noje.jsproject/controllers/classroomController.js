@@ -93,7 +93,11 @@ exports.addStudentToClass = async (req, res) => {
         let decoded;
         
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production');
+            // 🔒 SECURITY: JWT_SECRET environment variable zorunlu
+            if (!process.env.JWT_SECRET) {
+                throw new Error('JWT_SECRET environment variable tanımlı değil!');
+            }
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (error) {
             await session.abortTransaction();
             session.endSession();

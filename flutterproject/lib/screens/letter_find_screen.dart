@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
+import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
+import '../services/activity_tracker_service.dart';
+import '../services/current_session_service.dart';
+import '../providers/student_selection_provider.dart';
+import '../utils/app_logger.dart';
 
 class LetterFindScreen extends StatefulWidget {
   final Activity activity;
@@ -32,12 +38,20 @@ class _LetterFindScreenState extends State<LetterFindScreen>
   bool _showCompletion = false;
   bool _showStartScreen = true;
   final List<AnimationController> _confettiControllers = [];
+  bool _hasAnswered = false;
+  int _score = 0;
+  final ActivityTrackerService _activityTracker = ActivityTrackerService();
+  final CurrentSessionService _sessionService = CurrentSessionService();
+  DateTime? _activityStartTime;
+  String? _studentId; // dispose() içinde context kullanmamak için saklanıyor
 
   @override
   void initState() {
     super.initState();
     _currentWordIndex = widget.currentQuestionIndex;
     _selectedLetters = <int>{};
+    _hasAnswered = false;
+    _score = 0;
     
     _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
@@ -45,6 +59,12 @@ class _LetterFindScreenState extends State<LetterFindScreen>
           _isPlayingAudio = false;
         });
       }
+    });
+    _startActivityTracking();
+    
+    // İlk kelime gösterilirken ikinci kelimenin resmini önceden yükle
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadNextWordImage(_currentWordIndex);
     });
   }
 
@@ -55,23 +75,67 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     for (var controller in _confettiControllers) {
       controller.dispose();
     }
+    _endActivityTracking();
     super.dispose();
+  }
+
+  Future<void> _startActivityTracking() async {
+    if (!mounted) return;
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      _studentId = selectedStudent.id; // dispose() için sakla
+      _activityStartTime = DateTime.now();
+      await _activityTracker.startActivity(
+        studentId: selectedStudent.id,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+      );
+    }
+  }
+
+  Future<void> _endActivityTracking({String? successStatus}) async {
+    // dispose() içinde çağrıldığında context kullanılamaz, bu yüzden _studentId kullanıyoruz
+    final studentId = _studentId ?? (mounted ? Provider.of<StudentSelectionProvider>(context, listen: false).selectedStudent?.id : null);
+    
+    if (studentId != null && _activityStartTime != null) {
+      final duration = DateTime.now().difference(_activityStartTime!).inSeconds;
+      
+      await _activityTracker.endActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
+      );
+      
+      // Oturum servisine de ekle (TAMAMLANMIŞ olarak işaretle)
+      _sessionService.addActivity(
+        studentId: studentId,
+        activityId: widget.activity.id,
+        activityTitle: widget.activity.title,
+        durationSeconds: duration,
+        successStatus: successStatus ?? (_hasAnswered && _score > 0 ? 'Başarılı' : 'Tamamlandı'),
+        isCompleted: true, // Aktivite başarıyla tamamlandı
+        correctAnswerCount: _score, // Doğru cevap sayısı
+      );
+    }
   }
 
   List<Map<String, dynamic>> _getWords() {
     final question = widget.questions[widget.currentQuestionIndex];
-    debugPrint('🔍 LetterFindScreen - Question ID: ${question.id}');
-    debugPrint('🔍 Question Type: ${question.questionType}');
-    debugPrint('🔍 Question Data: ${question.data}');
+    AppLogger.debug('LetterFindScreen - Question ID: ${question.id}');
+    AppLogger.debug('Question Type: ${question.questionType}');
+    AppLogger.debug('Question Format: ${question.questionFormat}');
+    AppLogger.debug('Question Data: ${question.data}');
     
     final contentObject = question.data?['contentObject'];
-    debugPrint('🔍 Content Object: $contentObject');
+    AppLogger.debug('Content Object: $contentObject');
     
     if (contentObject != null) {
       if (contentObject is Map) {
         if (contentObject['words'] != null) {
           final words = contentObject['words'];
-          debugPrint('🔍 Words found: ${words is List ? words.length : 'not a list'}');
+          AppLogger.debug('Words found: ${words is List ? words.length : 'not a list'}');
           if (words is List) {
             return words.map((w) => Map<String, dynamic>.from(w)).toList();
           }
@@ -79,7 +143,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       }
     }
     
-    debugPrint('⚠️ No words found, returning empty list');
+    AppLogger.warning('No words found, returning empty list');
     return [];
   }
 
@@ -143,9 +207,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
   }
 
-
-
-
   void _createSmallConfetti(int letterIndex) {
     // Konfeti animasyonu için controller oluştur
     final controller = AnimationController(
@@ -189,6 +250,11 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     setState(() {
       // Buton durumu güncellenir
     });
+    
+    // Tüm hedef harfler seçildiyse, bir sonraki kelimenin resmini önceden yükle
+    if (_areAllTargetLettersSelected()) {
+      _preloadNextWordImage(_currentWordIndex);
+    }
   }
 
   void _changeItem(int direction) {
@@ -199,10 +265,64 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       setState(() {
         _currentWordIndex = newIndex;
         _selectedLetters = <int>{}; // Yeni kelime için seçimleri sıfırla
+        _hasAnswered = false;
       });
+      
+      // Bir sonraki kelimenin resmini önceden yükle (kullanıcı beklemez)
+      _preloadNextWordImage(_currentWordIndex);
     } else if (direction == 1 && newIndex >= words.length) {
       // Tüm kelimeler tamamlandı
       _showCompletionMessage();
+    }
+  }
+  
+  /// Bir sonraki kelimenin resmini önceden yükle (preload)
+  void _preloadNextWordImage(int currentWordIndex) {
+    if (!mounted) return;
+    
+    final words = _getWords();
+    final nextWordIndex = currentWordIndex + 1;
+    
+    // Bir sonraki kelime var mı kontrol et
+    if (nextWordIndex >= words.length) return;
+    
+    final nextWord = words[nextWordIndex];
+    
+    // Bir sonraki kelimenin resmini al
+    String? imageFileId = nextWord['image'];
+    if (imageFileId == null) {
+      final question = widget.questions[widget.currentQuestionIndex];
+      imageFileId = question.mediaFileId;
+    }
+    
+    if (imageFileId != null && imageFileId.isNotEmpty) {
+      final imageUrl = _getFileUrl(imageFileId);
+      
+      if (imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+        // Resmi arka planda önceden yükle (kullanıcı beklemez)
+        Future.delayed(const Duration(milliseconds: 300), () async {
+          if (!mounted) return;
+          
+          try {
+            final imageProvider = CachedNetworkImageProvider(
+              imageUrl,
+              maxWidth: 400, // Görüntü kodlama hatası için maxWidth ekle
+              maxHeight: 400,
+            );
+            await precacheImage(
+              imageProvider,
+              context,
+            ).timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                // Timeout durumunda sessizce devam et
+              },
+            );
+          } catch (e) {
+            // Görüntü kodlama hatası dahil tüm hataları yakala
+          }
+        });
+      }
     }
   }
 
@@ -239,7 +359,17 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       _currentWordIndex = 0;
       _selectedLetters = <int>{};
       _showCompletion = false;
+      _hasAnswered = false;
+      _score = 0;
     });
+  }
+
+  /// Etkinlik tamamlandığında mail gönder
+  /// Etkinlik tamamlandığında dialog'u kapat (aktivite zaten oturum servisine kaydedildi)
+  void _onCompleted() {
+    // Aktivite zaten oturum servisine kaydedildi (_showCompletionMessage çağrılmadan önce)
+    // Sadece dialog'u kapat ve geri git
+    Navigator.of(context).pop();
   }
 
   void _startGame() {
@@ -342,26 +472,55 @@ class _LetterFindScreenState extends State<LetterFindScreen>
                     ),
                   ),
                   const SizedBox(height: 40),
-                  ElevatedButton(
-                    onPressed: _restartActivity,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 15,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Tamamlandı Butonu (Sadece kaydet, mail gönderme)
+                      ElevatedButton(
+                        onPressed: _onCompleted,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2196F3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: const Text(
+                          'Tamamlandı',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
+                      const SizedBox(width: 20),
+                      // Tekrar Başla Butonu
+                      ElevatedButton(
+                        onPressed: _restartActivity,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B6B),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: const Text(
+                          'Tekrar Başla',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                      elevation: 4,
-                    ),
-                    child: const Text(
-                      'Tekrar Başla',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -372,7 +531,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
 
     final words = _getWords();
-    debugPrint('🔍 Current word index: $_currentWordIndex, Total words: ${words.length}');
+    AppLogger.debug('Current word index: $_currentWordIndex, Total words: ${words.length}');
     
     if (words.isEmpty) {
       return Scaffold(
@@ -499,16 +658,24 @@ class _LetterFindScreenState extends State<LetterFindScreen>
                               ? CachedNetworkImage(
                                   imageUrl: _getFileUrl(imageFileId),
                                   fit: BoxFit.contain,
+                                  maxWidthDiskCache: 400, // Görüntü kodlama hatası için ekle
+                                  maxHeightDiskCache: 400,
+                                  memCacheWidth: 400,
+                                  memCacheHeight: 400,
                                   placeholder: (context, url) => const Center(
                                     child: CircularProgressIndicator(),
                                   ),
-                                  errorWidget: (context, url, error) => const Center(
-                                    child: Icon(
-                                      Icons.image_not_supported,
-                                      size: 64,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
+                                  errorWidget: (context, url, error) {
+                                    // Görüntü kodlama hatasını yakala
+                                    debugPrint('❌ Image error: $url - $error');
+                                    return const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
                                 )
                               : const Center(
                                   child: Icon(

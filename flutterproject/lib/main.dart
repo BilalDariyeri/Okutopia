@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
+import 'providers/user_profile_provider.dart';
+import 'providers/content_provider.dart';
+import 'providers/statistics_provider.dart';
+import 'providers/student_selection_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/student_selection_screen.dart';
 import 'screens/categories_screen.dart';
 import 'screens/groups_screen.dart';
 import 'screens/statistics_screen.dart';
+import 'screens/teacher_profile_screen.dart';
+import 'screens/teacher_notes_screen.dart';
 import 'models/category_model.dart';
 
 void main() async {
@@ -26,25 +32,39 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(prefs),
-      child: MaterialApp(
-        title: 'OKUTOPIA',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF4834D4),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        initialRoute: '/login',
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => UserProfileProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => StudentSelectionProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => ContentProvider()),
+        ChangeNotifierProvider(create: (_) => StatisticsProvider()),
+      ],
+      child: Builder(
+        builder: (context) {
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final userProfileProvider = Provider.of<UserProfileProvider>(context, listen: false);
+          authProvider.setUserProfileProvider(userProfileProvider);
+          
+          return MaterialApp(
+            title: 'OKUTOPIA',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF4834D4),
+                brightness: Brightness.light,
+              ),
+              useMaterial3: true,
+            ),
+            initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const HomeScreen(),
           '/student-selection': (context) => const StudentSelectionScreen(),
           '/categories': (context) => const CategoriesScreen(),
           '/statistics': (context) => const StatisticsScreen(),
+          '/teacher-notes': (context) => const TeacherNotesScreen(),
+          '/teacher-profile': (context) => const TeacherProfileScreen(),
           '/groups': (context) {
             final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
             final category = args?['category'] as Category?;
@@ -54,46 +74,48 @@ class MyApp extends StatelessWidget {
             return GroupsScreen(category: category);
           },
         },
-        onUnknownRoute: (settings) {
-          return MaterialPageRoute(
-            builder: (context) => const LoginScreen(),
-          );
-        },
-        builder: (context, child) {
-          return Consumer<AuthProvider>(
-            builder: (context, authProvider, _) {
-              final route = ModalRoute.of(context);
-              final routeName = route?.settings.name;
+            onUnknownRoute: (settings) {
+              return MaterialPageRoute(
+                builder: (context) => const LoginScreen(),
+              );
+            },
+            builder: (context, child) {
+              return Consumer<AuthProvider>(
+                builder: (context, authProvider, _) {
+                  final route = ModalRoute.of(context);
+                  final routeName = route?.settings.name;
 
-              // Auth durumuna göre yönlendirme
-              if (routeName == '/login' && authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/student-selection');
+                  // Auth durumuna göre yönlendirme
+                  if (routeName == '/login' && authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/student-selection');
+                      }
+                    });
+                    return child ?? const StudentSelectionScreen();
                   }
-                });
-                return child ?? const StudentSelectionScreen();
-              }
 
-              if (routeName == '/home' && !authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
+                  if (routeName == '/home' && !authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/login');
+                      }
+                    });
+                    return child ?? const LoginScreen();
                   }
-                });
-                return child ?? const LoginScreen();
-              }
 
-              if (routeName == '/student-selection' && !authProvider.isAuthenticated) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
+                  if (routeName == '/student-selection' && !authProvider.isAuthenticated) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/login');
+                      }
+                    });
+                    return child ?? const LoginScreen();
                   }
-                });
-                return child ?? const LoginScreen();
-              }
 
-              return child ?? const SizedBox();
+                  return child ?? const SizedBox();
+                },
+              );
             },
           );
         },

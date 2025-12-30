@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_profile_provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -8,7 +9,8 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    final user = authProvider.user;
+    final userProfileProvider = Provider.of<UserProfileProvider>(context);
+    final user = userProfileProvider.user;
 
     return Scaffold(
       appBar: AppBar(
@@ -57,7 +59,7 @@ class HomeScreen extends StatelessWidget {
                     ),
               ),
             const SizedBox(height: 30),
-            if (authProvider.classroom != null)
+            if (userProfileProvider.classroom != null)
               Card(
                 margin: const EdgeInsets.all(20),
                 child: Padding(
@@ -70,7 +72,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        authProvider.classroom!.name,
+                        userProfileProvider.classroom!.name,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),

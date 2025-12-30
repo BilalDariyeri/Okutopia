@@ -4,7 +4,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { loginLimiter } = require('../middleware/rateLimiter');
+// Rate limiter kaldırıldı
+// const { loginLimiter } = require('../middleware/rateLimiter');
 
 /**
  * @swagger
@@ -43,7 +44,8 @@ const { loginLimiter } = require('../middleware/rateLimiter');
  *       '403':
  *         description: Admin yetkisi gerekli
  */
-router.post('/login', loginLimiter, adminController.adminLogin);
+// 💡 DEV: Rate limiting devre dışı
+router.post('/login', /* loginLimiter, */ adminController.adminLogin);
 
 /**
  * @swagger
@@ -1034,6 +1036,18 @@ router.get('/statistics/teacher/student/:studentId', authenticate, requireAdmin,
  *       - bearerAuth: []
  */
 router.post('/statistics/student/:studentId/send-email', authenticate, requireAdmin, statisticsController.sendStatisticsEmail);
+
+/**
+ * @swagger
+ * /api/admin/statistics/student/{studentId}/send-session-email:
+ *   post:
+ *     summary: Admin Panel - Oturum Bazlı İstatistikleri Email Olarak Gönderme
+ *     tags: [Admin]
+ *     description: Admin panelinden öğrencinin oturum bazlı istatistiklerini email olarak gönderir
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/statistics/student/:studentId/send-session-email', authenticate, requireAdmin, statisticsController.sendSessionStatisticsEmail);
 
 // 💡 ÖĞRETMEN NOTLARI: Admin panel için öğretmen notları endpoint'leri (proxy)
 const teacherNoteController = require('../controllers/teacherNoteController');

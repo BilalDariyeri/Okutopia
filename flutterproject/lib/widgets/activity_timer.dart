@@ -161,7 +161,7 @@ class _ActivityTimerState extends State<ActivityTimer>
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -173,57 +173,58 @@ class _ActivityTimerState extends State<ActivityTimer>
                   const Color(0xFF7F8C8D),
                 ]
               : [
-                  // Çalışırken canlı renkler
+                  // Çalışırken canlı ve çekici renkler (çocuklar için)
                   const Color(0xFF4ECDC4),
                   const Color(0xFF44A08D),
                 ],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: (_isPaused ? Colors.grey : const Color(0xFF4ECDC4))
-                .withValues(alpha: 0.4),
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
+                .withValues(alpha: 0.5),
+            blurRadius: 12,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Süre Gösterimi (Kompakt)
+          // Süre Gösterimi (Büyük ve Okunaklı - Çocuklar için)
           Text(
             _formatDuration(_elapsedDuration),
             style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 32,
               fontWeight: FontWeight.bold,
               fontFeatures: [
                 const FontFeature.tabularFigures(),
               ],
-              letterSpacing: 1,
+              letterSpacing: 2,
               shadows: [
                 Shadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(width: 16),
           
-          // Play/Pause Butonu (Küçük)
+          // Play/Pause Butonu (Büyük ve Çekici)
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: _toggleTimer,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(30),
               child: Container(
-                width: 36,
-                height: 36,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: _isPaused
                       ? const Color(0xFF2ECC71) // Yeşil (Devam)
@@ -234,17 +235,17 @@ class _ActivityTimerState extends State<ActivityTimer>
                       color: (_isPaused
                               ? const Color(0xFF2ECC71)
                               : const Color(0xFFE74C3C))
-                          .withValues(alpha: 0.5),
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 2),
+                          .withValues(alpha: 0.6),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
                 child: Icon(
                   _isPaused ? Icons.play_arrow : Icons.pause,
                   color: Colors.white,
-                  size: 18,
+                  size: 28,
                 ),
               ),
             ),

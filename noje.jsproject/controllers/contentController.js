@@ -4,7 +4,7 @@ const Group = require('../models/group');
 const Lesson = require('../models/lesson');
 const Activity = require('../models/activity');
 const MiniQuestion = require('../models/miniQuestion');
-const Progress = require('../models/Progress');
+const Progress = require('../models/progress');
 const logger = require('../config/logger'); 
 
 // ======================================================================
