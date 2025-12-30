@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
@@ -133,7 +132,7 @@ class _LetterDottedScreenState extends State<LetterDottedScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      debugPrint('Ses çalınamadı: $e');
     }
   }
 
@@ -480,8 +479,6 @@ class _LetterDottedScreenState extends State<LetterDottedScreen>
 
   @override
   Widget build(BuildContext context) {
-    final question = widget.questions[widget.currentQuestionIndex];
-    final imageFileId = question.mediaFileId ?? question.data?['imageFileId'];
     final currentIndex = widget.currentQuestionIndex;
     final totalQuestions = widget.questions.length;
     final hasPrevious = currentIndex > 0;

@@ -1,9 +1,9 @@
 // Web-specific implementation
-import 'dart:html' as html;
-import 'dart:ui' as ui;
+import 'package:web/web.dart' as web;
+import 'dart:ui_web' as ui;
 
 dynamic createVideoElement(String videoUrl, String viewId, Function(dynamic)? onError, Function()? onLoaded) {
-  final videoElement = html.VideoElement()
+  final videoElement = web.HTMLVideoElement()
     ..src = videoUrl
     ..autoplay = true
     ..loop = true

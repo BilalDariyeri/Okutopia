@@ -31,33 +31,13 @@ class _LetterFindScreenState extends State<LetterFindScreen>
   Set<int> _selectedLetters = <int>{};
   bool _showCompletion = false;
   bool _showStartScreen = true;
-  List<AnimationController> _confettiControllers = [];
-  bool _hasLetterInWord = false;
-  bool _hasAnswered = false;
-  int _score = 0;
-  final List<Color> _confettiColors = [
-    const Color(0xFFFF6B6B),
-    const Color(0xFF4ECDC4),
-    const Color(0xFF45B7D1),
-    const Color(0xFF96CEB4),
-    const Color(0xFFFFEAA7),
-    const Color(0xFFDDA0DD),
-    const Color(0xFF98D8C8),
-    const Color(0xFFFFB347),
-    const Color(0xFF87CEEB),
-    const Color(0xFFF0E68C),
-    const Color(0xFFFFA07A),
-    const Color(0xFF20B2AA),
-  ];
+  final List<AnimationController> _confettiControllers = [];
 
   @override
   void initState() {
     super.initState();
     _currentWordIndex = widget.currentQuestionIndex;
     _selectedLetters = <int>{};
-    _hasAnswered = false;
-    _hasLetterInWord = false;
-    _score = 0;
     
     _playerCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
@@ -80,19 +60,18 @@ class _LetterFindScreenState extends State<LetterFindScreen>
 
   List<Map<String, dynamic>> _getWords() {
     final question = widget.questions[widget.currentQuestionIndex];
-    print('🔍 LetterFindScreen - Question ID: ${question.id}');
-    print('🔍 Question Type: ${question.questionType}');
-    print('🔍 Question Format: ${question.questionFormat}');
-    print('🔍 Question Data: ${question.data}');
+    debugPrint('🔍 LetterFindScreen - Question ID: ${question.id}');
+    debugPrint('🔍 Question Type: ${question.questionType}');
+    debugPrint('🔍 Question Data: ${question.data}');
     
     final contentObject = question.data?['contentObject'];
-    print('🔍 Content Object: $contentObject');
+    debugPrint('🔍 Content Object: $contentObject');
     
     if (contentObject != null) {
       if (contentObject is Map) {
         if (contentObject['words'] != null) {
           final words = contentObject['words'];
-          print('🔍 Words found: ${words is List ? words.length : 'not a list'}');
+          debugPrint('🔍 Words found: ${words is List ? words.length : 'not a list'}');
           if (words is List) {
             return words.map((w) => Map<String, dynamic>.from(w)).toList();
           }
@@ -100,7 +79,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       }
     }
     
-    print('⚠️ No words found, returning empty list');
+    debugPrint('⚠️ No words found, returning empty list');
     return [];
   }
 
@@ -164,31 +143,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
   }
 
-  bool _checkLetterInWord() {
-    final words = _getWords();
-    if (_currentWordIndex >= words.length) return false;
-    
-    final word = words[_currentWordIndex];
-    final letters = List<String>.from(word['letters'] ?? []);
-    final targetLetter = _getTargetLetter();
-    
-    return letters.any((letter) => letter.toLowerCase() == targetLetter.toLowerCase());
-  }
 
-  void _playSoundAndCheck() {
-    final question = widget.questions[widget.currentQuestionIndex];
-    final audioFileId = question.data?['audioFileId'];
-    
-    if (audioFileId != null) {
-      _playAudio(audioFileId);
-    }
-    
-    // Kelimede harf var mı kontrol et
-    final hasLetter = _checkLetterInWord();
-    setState(() {
-      _hasLetterInWord = hasLetter;
-    });
-  }
 
 
   void _createSmallConfetti(int letterIndex) {
@@ -244,8 +199,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       setState(() {
         _currentWordIndex = newIndex;
         _selectedLetters = <int>{}; // Yeni kelime için seçimleri sıfırla
-        _hasAnswered = false;
-        _hasLetterInWord = false;
       });
     } else if (direction == 1 && newIndex >= words.length) {
       // Tüm kelimeler tamamlandı
@@ -286,9 +239,6 @@ class _LetterFindScreenState extends State<LetterFindScreen>
       _currentWordIndex = 0;
       _selectedLetters = <int>{};
       _showCompletion = false;
-      _hasAnswered = false;
-      _hasLetterInWord = false;
-      _score = 0;
     });
   }
 
@@ -422,7 +372,7 @@ class _LetterFindScreenState extends State<LetterFindScreen>
     }
 
     final words = _getWords();
-    print('🔍 Current word index: $_currentWordIndex, Total words: ${words.length}');
+    debugPrint('🔍 Current word index: $_currentWordIndex, Total words: ${words.length}');
     
     if (words.isEmpty) {
       return Scaffold(

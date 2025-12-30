@@ -28,7 +28,7 @@ class ActivityTrackerService {
       final prefs = await SharedPreferences.getInstance();
       final trackingData = await _getTrackingData(prefs);
       
-      final key = '$studentId\_$activityId';
+      final key = '${studentId}_$activityId';
       final now = DateTime.now().toIso8601String();
       
       trackingData[key] = {
@@ -57,7 +57,7 @@ class ActivityTrackerService {
       final prefs = await SharedPreferences.getInstance();
       final trackingData = await _getTrackingData(prefs);
       
-      final key = '$studentId\_$activityId';
+      final key = '${studentId}_$activityId';
       final activityData = trackingData[key];
       
       if (activityData != null && activityData['endTime'] == null) {
@@ -101,7 +101,7 @@ class ActivityTrackerService {
       final Map<String, ActivityDuration> durations = {};
       
       trackingData.forEach((key, value) {
-        if (key.startsWith('$studentId\_')) {
+        if (key.startsWith('${studentId}_')) {
           final startTime = DateTime.parse(value['startTime']);
           
           // Bugünkü aktiviteleri filtrele
@@ -158,7 +158,7 @@ class ActivityTrackerService {
       final prefs = await SharedPreferences.getInstance();
       final trackingData = await _getTrackingData(prefs);
       
-      trackingData.removeWhere((key, value) => key.startsWith('$studentId\_'));
+      trackingData.removeWhere((key, value) => key.startsWith('${studentId}_'));
       
       await _saveTrackingData(prefs, trackingData);
       debugPrint('✅ Tracking verileri temizlendi: $studentId');

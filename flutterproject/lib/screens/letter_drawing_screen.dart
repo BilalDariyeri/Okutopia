@@ -36,8 +36,8 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
   StreamSubscription? _playerCompleteSubscription;
 
   late AnimationController _arrowAnimationController;
-  List<Offset> _arrowPositions = [];
-  List<double> _arrowRotations = [];
+  final List<Offset> _arrowPositions = [];
+  final List<double> _arrowRotations = [];
   
   // Gezegen animasyonları için controller'lar
   late AnimationController _planet1Controller;
@@ -190,7 +190,7 @@ class _LetterDrawingScreenState extends State<LetterDrawingScreen>
       await _audioPlayer.setVolume(volume);
       await _audioPlayer.play(UrlSource(url));
     } catch (e) {
-      print('Ses çalınamadı: $e');
+      debugPrint('Ses çalınamadı: $e');
     }
   }
 

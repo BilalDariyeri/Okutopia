@@ -51,7 +51,7 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
 
     if (videoFileId != null && videoFileId.isNotEmpty) {
       final videoUrl = _getFileUrl(videoFileId);
-      print('📹 Video URL: $videoUrl');
+      debugPrint('📹 Video URL: $videoUrl');
       
       // Hem web hem mobil için video_player kullan (web'de de çalışır)
       _videoController = VideoPlayerController.networkUrl(
@@ -59,7 +59,7 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
       );
 
       _videoController!.initialize().then((_) {
-        print('✅ Video başarıyla yüklendi');
+        debugPrint('✅ Video başarıyla yüklendi');
         if (mounted) {
           setState(() {
             _isVideoInitialized = true;
@@ -69,8 +69,8 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
           _videoController!.play();
         }
       }).catchError((error) {
-        print('❌ Video yüklenemedi: $error');
-        print('❌ Video URL: $videoUrl');
+        debugPrint('❌ Video yüklenemedi: $error');
+        debugPrint('❌ Video URL: $videoUrl');
         if (mounted) {
           setState(() {
             _isVideoInitialized = false;
@@ -79,10 +79,10 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
         }
       });
     } else {
-      print('⚠️ Video dosya ID bulunamadı');
-      print('   question.data: ${question.data}');
-      print('   question.mediaFileId: ${question.mediaFileId}');
-      print('   question.mediaType: ${question.mediaType}');
+      debugPrint('⚠️ Video dosya ID bulunamadı');
+      debugPrint('   question.data: ${question.data}');
+      debugPrint('   question.mediaFileId: ${question.mediaFileId}');
+      debugPrint('   question.mediaType: ${question.mediaType}');
     }
   }
 
@@ -101,12 +101,12 @@ class _LetterWritingBoardScreenState extends State<LetterWritingBoardScreen> {
   void _onPanStart(DragStartDetails details) {
     final RenderBox? box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) {
-      print('⚠️ RenderBox bulunamadı');
+      debugPrint('⚠️ RenderBox bulunamadı');
       return;
     }
     
     final localPosition = box.globalToLocal(details.globalPosition);
-    print('🎨 Çizim başladı: $localPosition');
+    debugPrint('🎨 Çizim başladı: $localPosition');
     
     setState(() {
       _paths.add([localPosition]);
