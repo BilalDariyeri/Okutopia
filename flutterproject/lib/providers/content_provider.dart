@@ -15,9 +15,9 @@ class ContentProvider with ChangeNotifier {
 
   // Cache'lenmiş veriler
   List<Category>? _cachedCategories;
-  Map<String, List<Group>> _cachedGroups = {};
-  Map<String, List<Lesson>> _cachedLessons = {};
-  Map<String, List<Activity>> _cachedActivities = {};
+  final Map<String, List<Group>> _cachedGroups = {};
+  final Map<String, List<Lesson>> _cachedLessons = {};
+  final Map<String, List<Activity>> _cachedActivities = {};
 
   // Loading durumları (sadece background refresh için)
   bool _isRefreshingCategories = false;

@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/content_service.dart';
 import '../models/activity_model.dart';
+import '../services/activity_progress_service.dart';
+import '../providers/student_selection_provider.dart';
 import 'questions_screen.dart';
 
 class LetterActivitiesScreen extends StatefulWidget {
@@ -20,10 +24,12 @@ class LetterActivitiesScreen extends StatefulWidget {
 
 class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with TickerProviderStateMixin {
   final ContentService _contentService = ContentService();
+  final ActivityProgressService _progressService = ActivityProgressService();
   final ScrollController _scrollController = ScrollController();
   List<Activity> _activities = [];
-  bool _isLoading = true;
+  bool _isLoading = true; // Skeleton loading gösterilecek
   String? _errorMessage;
+  Set<String> _completedActivityIds = {}; // Tamamlanan etkinlik ID'leri
 
   // Animasyon controller'ları
   late AnimationController _planet1Controller;
@@ -55,7 +61,32 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
       vsync: this,
     )..repeat();
     
-    _loadActivities();
+    // Ekranı hemen göster, veri yükleme işlemini arka plana al (navigation hızlandırma)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadActivities();
+        _loadProgress();
+      }
+    });
+  }
+
+  /// İlerleme verilerini yükle
+  Future<void> _loadProgress() async {
+    final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
+    final selectedStudent = studentSelectionProvider.selectedStudent;
+    
+    if (selectedStudent != null) {
+      final completed = await _progressService.getCompletedActivitiesAsync(
+        studentId: selectedStudent.id,
+        letter: widget.letterUpper,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _completedActivityIds = completed;
+        });
+      }
+    }
   }
 
   @override
@@ -69,36 +100,52 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
   }
 
   Future<void> _loadActivities() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // Tüm kategorileri çek
-      final categoriesResponse = await _contentService.getAllCategories();
-      final allActivities = <Activity>[];
+      // Tüm kategorileri çek (kısa timeout ile hızlandır)
+      final categoriesResponse = await _contentService.getAllCategories()
+          .timeout(const Duration(seconds: 3), onTimeout: () {
+        throw TimeoutException('Kategoriler yüklenemedi - zaman aşımı');
+      });
+      if (!mounted) return;
       
-      // Her kategori için grupları çek
-      for (var category in categoriesResponse.categories) {
+      // Paralel işleme için Future.wait kullan
+      final categoryFutures = categoriesResponse.categories.map((category) async {
+        if (!mounted) return <Activity>[];
+        
         try {
           final groupsResponse = await _contentService.getGroupsByCategory(
             categoryId: category.id,
           );
+          if (!mounted) return <Activity>[];
           
-          // Her grup için dersleri çek
-          for (var group in groupsResponse.groups) {
+          // Grupları paralel işle
+          final groupFutures = groupsResponse.groups.map((group) async {
+            if (!mounted) return <Activity>[];
+            
             try {
               final lessonsResponse = await _contentService.getLessonsByGroup(
                 groupId: group.id,
               );
+              if (!mounted) return <Activity>[];
               
-              // Her ders için aktiviteleri çek
-              for (var lesson in lessonsResponse.lessons) {
+              // Dersleri paralel işle
+              final lessonFutures = lessonsResponse.lessons.map((lesson) async {
+                if (!mounted) return <Activity>[];
+                
                 try {
                   final activitiesResponse = await _contentService.getActivitiesByLesson(
                     lessonId: lesson.id,
                   );
+                  if (!mounted) return <Activity>[];
+                  
+                  final categoryActivities = <Activity>[];
                   
                   // Harfe göre filtreleme yap - Her harf için belirli aktiviteler
                   for (var activity in activitiesResponse.activities) {
@@ -138,39 +185,59 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
                         final firstGroupLetters = ['A', 'N', 'E', 'T', 'İ', 'I', 'L'];
                         if (firstGroupLetters.contains(letterUpper) || 
                             firstGroupLetters.contains(letterLower)) {
-                          allActivities.add(activity);
+                          categoryActivities.add(activity);
                           continue;
                         }
                       }
                       
                       // "A Harfi Sesi Hissetme" gibi başlıklar için harf kontrolü
-                      // ÇOK GENİŞ harf kontrolü - başlıkta harf geçiyorsa (herhangi bir yerde) kabul et
-                      final hasLetter = titleUpper.contains(letterUpper) || 
-                          titleUpper.contains(letterLower) ||
-                          titleUpper.contains(' ${letterUpper} ') ||
-                          titleUpper.contains(' ${letterLower} ') ||
-                          titleUpper.startsWith('${letterUpper} ') ||
-                          titleUpper.startsWith('${letterLower} ') ||
-                          titleUpper.contains(' ${letterUpper} HARF') ||
-                          titleUpper.contains(' ${letterLower} HARF') ||
-                          titleUpper.contains(' ${letterUpper} HARFİ') ||
-                          titleUpper.contains(' ${letterLower} HARFİ') ||
+                      // ÖNCE ESNEK SONRA SPESİFİK kontrol
+                      final hasLetter = 
+                          // Başlık başında harf
+                          titleUpper.startsWith('${letterUpper}') ||
+                          titleUpper.startsWith('${letterLower}') ||
+                          // Boşluktan sonra harf
+                          titleUpper.contains(' ${letterUpper}') ||
+                          titleUpper.contains(' ${letterLower}') ||
+                          // "A Harfi" formatı
                           titleUpper.contains('${letterUpper} HARF') ||
                           titleUpper.contains('${letterLower} HARF') ||
+                          titleUpper.contains('${letterUpper} HARFİ') ||
+                          titleUpper.contains('${letterLower} HARFİ') ||
+                          // "Harf A" formatı
                           titleUpper.contains('HARF ${letterUpper}') ||
                           titleUpper.contains('HARF ${letterLower}') ||
                           titleUpper.contains('HARFİ ${letterUpper}') ||
                           titleUpper.contains('HARFİ ${letterLower}') ||
-                          // "A Harfi" formatı
-                          titleUpper.contains('${letterUpper} HARFİ') ||
-                          titleUpper.contains('${letterLower} HARFİ') ||
-                          // Emoji kontrolü
-                          (titleUpper.contains('🎵') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower))) ||
-                          (titleUpper.contains('🎶') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower)));
+                          // Emoji ile birlikte
+                          (titleUpper.contains('🎵') && titleUpper.contains(letterUpper)) ||
+                          (titleUpper.contains('🎵') && titleUpper.contains(letterLower)) ||
+                          (titleUpper.contains('🎶') && titleUpper.contains(letterUpper)) ||
+                          (titleUpper.contains('🎶') && titleUpper.contains(letterLower));
                       
-                      // Eğer harf varsa veya "1. grup harf" ise göster
-                      if (hasLetter || hasGroupHarf) {
-                        allActivities.add(activity);
+                      // EK GÜVENLİK: Başlıkta başka harfler geçiyorsa hariç tut
+                      bool hasOtherLetter = false;
+                      if (hasLetter) {
+                        final otherLetters = ['A', 'B', 'C', 'Ç', 'D', 'E', 'F', 'G', 'Ğ', 'H', 'I', 'İ', 'J', 'K', 'L', 'M', 'N', 'O', 'Ö', 'P', 'R', 'S', 'Ş', 'T', 'U', 'Ü', 'V', 'Y', 'Z'];
+                        for (var otherLetter in otherLetters) {
+                          if (otherLetter == letterUpper || otherLetter == letterLower) continue;
+                          
+                          // Başka bir harf başlıkta ÖNEMLİ bir yerdeyse
+                          if (titleUpper.startsWith('$otherLetter ') ||
+                              titleUpper.startsWith('$otherLetter HARF') ||
+                              titleUpper.contains(' $otherLetter HARF') ||
+                              titleUpper.contains(' $otherLetter HARFİ') ||
+                              titleUpper.contains('HARF $otherLetter') ||
+                              titleUpper.contains('HARFİ $otherLetter')) {
+                            hasOtherLetter = true;
+                            break;
+                          }
+                        }
+                      }
+                      
+                      // Eğer harf varsa ve başka harf yoksa veya "1. grup harf" ise göster
+                      if ((hasLetter && !hasOtherLetter) || hasGroupHarf) {
+                        categoryActivities.add(activity);
                         continue;
                       }
                     }
@@ -189,56 +256,108 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
                           (titleUpper.contains('SESİ') && titleUpper.contains('HİSSET'));
                       
                       if (hasOtherSound) {
-                      final hasLetter = titleUpper.contains(letterUpper) || 
-                          titleUpper.contains(letterLower) ||
-                          titleUpper.contains(' ${letterUpper} ') ||
-                          titleUpper.contains(' ${letterLower} ') ||
-                          titleUpper.startsWith('${letterUpper} ') ||
-                          titleUpper.startsWith('${letterLower} ') ||
-                          titleUpper.contains(' ${letterUpper} HARF') ||
-                          titleUpper.contains(' ${letterLower} HARF') ||
-                          titleUpper.contains(' ${letterUpper} HARFİ') ||
-                          titleUpper.contains(' ${letterLower} HARFİ') ||
-                          titleUpper.contains('${letterUpper} HARF') ||
-                          titleUpper.contains('${letterLower} HARF') ||
-                          titleUpper.contains('HARF ${letterUpper}') ||
-                          titleUpper.contains('HARF ${letterLower}') ||
-                          titleUpper.contains('HARFİ ${letterUpper}') ||
-                          titleUpper.contains('HARFİ ${letterLower}') ||
-                          (titleUpper.contains('GRUP') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower))) ||
-                          (titleUpper.contains('🎵') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower))) ||
-                          (titleUpper.contains('🎶') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower)));
-                      
+                        final hasLetter = 
+                            titleUpper.startsWith('${letterUpper}') ||
+                            titleUpper.startsWith('${letterLower}') ||
+                            titleUpper.contains(' ${letterUpper}') ||
+                            titleUpper.contains(' ${letterLower}') ||
+                            titleUpper.contains('${letterUpper} HARF') ||
+                            titleUpper.contains('${letterLower} HARF') ||
+                            titleUpper.contains('${letterUpper} HARFİ') ||
+                            titleUpper.contains('${letterLower} HARFİ') ||
+                            titleUpper.contains('HARF ${letterUpper}') ||
+                            titleUpper.contains('HARF ${letterLower}') ||
+                            titleUpper.contains('HARFİ ${letterUpper}') ||
+                            titleUpper.contains('HARFİ ${letterLower}') ||
+                            (titleUpper.contains('GRUP') && (
+                                titleUpper.contains(' ${letterUpper}') ||
+                                titleUpper.contains(' ${letterLower}') ||
+                                titleUpper.startsWith('${letterUpper}') ||
+                                titleUpper.startsWith('${letterLower}')
+                            )) ||
+                            (titleUpper.contains('🎵') && titleUpper.contains(letterUpper)) ||
+                            (titleUpper.contains('🎵') && titleUpper.contains(letterLower)) ||
+                            (titleUpper.contains('🎶') && titleUpper.contains(letterUpper)) ||
+                            (titleUpper.contains('🎶') && titleUpper.contains(letterLower));
+                        
+                        // EK GÜVENLİK: Başlıkta başka harfler geçiyorsa hariç tut
+                        bool hasOtherLetter = false;
                         if (hasLetter) {
-                          allActivities.add(activity);
+                          final otherLetters = ['A', 'B', 'C', 'Ç', 'D', 'E', 'F', 'G', 'Ğ', 'H', 'I', 'İ', 'J', 'K', 'L', 'M', 'N', 'O', 'Ö', 'P', 'R', 'S', 'Ş', 'T', 'U', 'Ü', 'V', 'Y', 'Z'];
+                          for (var otherLetter in otherLetters) {
+                            if (otherLetter == letterUpper || otherLetter == letterLower) continue;
+                            
+                            if (titleUpper.startsWith('$otherLetter ') ||
+                                titleUpper.startsWith('$otherLetter HARF') ||
+                                titleUpper.contains(' $otherLetter HARF') ||
+                                titleUpper.contains(' $otherLetter HARFİ') ||
+                                titleUpper.contains('HARF $otherLetter') ||
+                                titleUpper.contains('HARFİ $otherLetter')) {
+                              hasOtherLetter = true;
+                              break;
+                            }
+                          }
+                        }
+                        
+                        if (hasLetter && !hasOtherLetter) {
+                          categoryActivities.add(activity);
                           continue;
                         }
                       }
                     }
                     
                     // Normal filtreleme (sesi hissetme değilse)
-                    // Aktivite başlığında harf var mı kontrol et (çok esnek - her türlü formatı yakala)
-                    final hasLetter = titleUpper.contains(letterUpper) || 
-                        titleUpper.contains(letterLower) ||
-                        titleUpper.contains(' ${letterUpper} ') ||
-                        titleUpper.contains(' ${letterLower} ') ||
-                        titleUpper.startsWith('${letterUpper} ') ||
-                        titleUpper.startsWith('${letterLower} ') ||
-                        titleUpper.contains(' ${letterUpper} HARF') ||
-                        titleUpper.contains(' ${letterLower} HARF') ||
-                        titleUpper.contains(' ${letterUpper} HARFİ') ||
-                        titleUpper.contains(' ${letterLower} HARFİ') ||
+                    // Aktivite başlığında harf var mı kontrol et - ÖNCE ESNEK SONRA SPESİFİK
+                    // 1. ADIM: Harf başlıkta geçiyor mu? (esnek kontrol)
+                    final hasLetter = 
+                        // Başlık başında harf
+                        titleUpper.startsWith('${letterUpper}') ||
+                        titleUpper.startsWith('${letterLower}') ||
+                        // Boşluktan sonra harf (kelime başında)
+                        titleUpper.contains(' ${letterUpper}') ||
+                        titleUpper.contains(' ${letterLower}') ||
+                        // "A Harfi" formatı
                         titleUpper.contains('${letterUpper} HARF') ||
                         titleUpper.contains('${letterLower} HARF') ||
+                        titleUpper.contains('${letterUpper} HARFİ') ||
+                        titleUpper.contains('${letterLower} HARFİ') ||
+                        // "Harf A" formatı
                         titleUpper.contains('HARF ${letterUpper}') ||
                         titleUpper.contains('HARF ${letterLower}') ||
                         titleUpper.contains('HARFİ ${letterUpper}') ||
                         titleUpper.contains('HARFİ ${letterLower}') ||
-                        // Emoji veya özel karakterlerle başlayan başlıklar için
-                        (titleUpper.contains('🎵') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower))) ||
-                        (titleUpper.contains('🎶') && (titleUpper.contains(letterUpper) || titleUpper.contains(letterLower)));
+                        // Emoji ile birlikte
+                        (titleUpper.contains('🎵') && titleUpper.contains(letterUpper)) ||
+                        (titleUpper.contains('🎵') && titleUpper.contains(letterLower)) ||
+                        (titleUpper.contains('🎶') && titleUpper.contains(letterUpper)) ||
+                        (titleUpper.contains('🎶') && titleUpper.contains(letterLower));
                     
+                    // Eğer harf kontrolü başarısızsa, diğer harfleri kontrol etme
                     if (!hasLetter) continue;
+                    
+                    // 2. ADIM: Başlıkta başka harfler geçiyorsa hariç tut (spesifik kontrol)
+                    // ÖNEMLİ: Sadece başlıkta başka bir harf ÖNEMLİ bir yerdeyse (başta veya "Harf" kelimesiyle birlikte) hariç tut
+                    bool hasOtherLetter = false;
+                    final otherLetters = ['A', 'B', 'C', 'Ç', 'D', 'E', 'F', 'G', 'Ğ', 'H', 'I', 'İ', 'J', 'K', 'L', 'M', 'N', 'O', 'Ö', 'P', 'R', 'S', 'Ş', 'T', 'U', 'Ü', 'V', 'Y', 'Z'];
+                    for (var otherLetter in otherLetters) {
+                      if (otherLetter == letterUpper || otherLetter == letterLower) continue;
+                      
+                      // Başka bir harf başlıkta ÖNEMLİ bir yerdeyse (başta veya "Harf" kelimesiyle birlikte)
+                      // Örnek: "B Harfi" -> A için hariç tut, "A Harfi B" -> A için göster (B sonda)
+                      if (titleUpper.startsWith('$otherLetter ') ||
+                          titleUpper.startsWith('$otherLetter HARF') ||
+                          titleUpper.contains(' $otherLetter HARF') ||
+                          titleUpper.contains(' $otherLetter HARFİ') ||
+                          titleUpper.contains('HARF $otherLetter') ||
+                          titleUpper.contains('HARFİ $otherLetter')) {
+                        // Bu aktivite başka bir harfe ait, hariç tut
+                        hasOtherLetter = true;
+                        break;
+                      }
+                    }
+                    
+                    // Eğer başka bir harf varsa bu aktiviteyi atla
+                    if (hasOtherLetter) continue;
                     
                     // Her harf için belirli aktiviteleri göster
                     bool shouldShow = false;
@@ -278,44 +397,60 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
                     }
                     
                     if (shouldShow) {
-                      allActivities.add(activity);
+                      categoryActivities.add(activity);
                     }
                   }
+                  
+                  return categoryActivities;
                 } catch (e) {
-                  // Hata durumunda devam et
-                  continue;
+                  // Hata durumunda boş liste döndür
+                  return <Activity>[];
                 }
-              }
+              });
+              
+              final lessonResults = await Future.wait(lessonFutures);
+              return lessonResults.expand((activities) => activities).toList();
             } catch (e) {
-              // Hata durumunda devam et
-              continue;
+              // Hata durumunda boş liste döndür
+              return <Activity>[];
             }
-          }
+          });
+          
+          final groupResults = await Future.wait(groupFutures);
+          return groupResults.expand((activities) => activities).toList();
         } catch (e) {
-          // Hata durumunda devam et
-          continue;
+          // Hata durumunda boş liste döndür
+          return <Activity>[];
         }
-      }
+      });
       
-      setState(() {
-        _activities = allActivities;
-        _isLoading = false;
-      });
+      // Tüm kategorilerden gelen aktiviteleri birleştir
+      final categoryResults = await Future.wait(categoryFutures);
+      final allActivities = categoryResults.expand((activities) => activities).toList();
+      
+      if (mounted) {
+        setState(() {
+          _activities = allActivities;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        String errorMsg = e.toString().replaceAll('Exception: ', '');
-        if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
-          errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
-        } else if (errorMsg.contains('401') || errorMsg.contains('Token')) {
-          errorMsg = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
-        } else if (errorMsg.contains('403')) {
-          errorMsg = 'Bu işlem için yetkiniz bulunmamaktadır.';
-        } else if (errorMsg.contains('404')) {
-          errorMsg = 'Etkinlikler bulunamadı.';
-        }
-        _errorMessage = errorMsg;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          String errorMsg = e.toString().replaceAll('Exception: ', '');
+          if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
+            errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
+          } else if (errorMsg.contains('401') || errorMsg.contains('Token')) {
+            errorMsg = 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.';
+          } else if (errorMsg.contains('403')) {
+            errorMsg = 'Bu işlem için yetkiniz bulunmamaktadır.';
+          } else if (errorMsg.contains('404')) {
+            errorMsg = 'Etkinlikler bulunamadı.';
+          }
+          _errorMessage = errorMsg;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -375,13 +510,7 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
           ),
           // Ana içerik
           SafeArea(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : _errorMessage != null
+            child: _errorMessage != null
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -443,22 +572,24 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
                           // Ana içerik
                           SliverPadding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                            sliver: _activities.isEmpty
-                                ? SliverToBoxAdapter(child: _buildEmptyState())
-                                : SliverGrid(
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2, // 2 sütun
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.9,
-                                    ),
-                                    delegate: SliverChildBuilderDelegate(
-                                      (context, index) {
-                                        return _buildActivityCard(_activities[index], index);
-                                      },
-                                      childCount: _activities.length,
-                                    ),
-                                  ),
+                            sliver: _isLoading
+                                ? SliverToBoxAdapter(child: _buildSkeletonLoading())
+                                : _activities.isEmpty
+                                    ? SliverToBoxAdapter(child: _buildEmptyState())
+                                    : SliverGrid(
+                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2, // 2 sütun
+                                          crossAxisSpacing: 12,
+                                          mainAxisSpacing: 12,
+                                          childAspectRatio: 0.9,
+                                        ),
+                                        delegate: SliverChildBuilderDelegate(
+                                          (context, index) {
+                                            return _buildActivityCard(_activities[index], index);
+                                          },
+                                          childCount: _activities.length,
+                                        ),
+                                      ),
                           ),
                         ],
                       ),
@@ -468,23 +599,40 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
     );
   }
 
+  /// Etkinliğin tamamlanıp tamamlanmadığını kontrol et
+  bool _isActivityCompleted(String activityId) {
+    return _completedActivityIds.contains(activityId);
+  }
+
   Widget _buildActivityCard(Activity activity, int index) {
     final color = _getActivityColor(index);
     final icon = _getActivityIcon(activity.type);
+    final isCompleted = _isActivityCompleted(activity.id);
 
     return GestureDetector(
       onTap: () {
-        // Etkinlik seçildiğinde sorular ekranına git
+        // Etkinlik seçildiğinde sorular ekranına git (hızlı navigation)
+        // Tüm aktiviteler her zaman tıklanabilir (kilit sistemi kaldırıldı)
         Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => QuestionsScreen(activity: activity),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => QuestionsScreen(activity: activity),
+            transitionDuration: const Duration(milliseconds: 200), // Daha hızlı geçiş
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
           ),
-        );
+        ).then((_) {
+          // Etkinlik ekranından dönüldüğünde ilerlemeyi yeniden yükle
+          _loadProgress();
+        });
       },
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2C), // Koyu gri
+          color: const Color(0xFF2C2C2C), // Koyu gri (tüm aktiviteler açık)
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -540,6 +688,36 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
                   color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+            // Tamamlandı işareti
+            if (isCompleted) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.green[300],
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Tamamlandı',
+                      style: TextStyle(
+                        color: Colors.green[300],
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -756,6 +934,80 @@ class _LetterActivitiesScreenState extends State<LetterActivitiesScreen> with Ti
           },
         ),
       ],
+    );
+  }
+
+  /// Skeleton Loading - Loading spinner yerine animasyonlu kartlar
+  Widget _buildSkeletonLoading() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.9,
+      ),
+      itemCount: 6, // 6 skeleton kart göster
+      itemBuilder: (context, index) {
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.3, end: 0.6),
+          duration: Duration(milliseconds: 800 + (index * 100)),
+          curve: Curves.easeInOut,
+          builder: (context, value, child) {
+            return AnimatedBuilder(
+              animation: _planet1Controller, // Animasyon için mevcut controller'ı kullan
+              builder: (context, child) {
+                final pulseValue = 0.3 + 0.3 * math.sin(_planet1Controller.value * 2 * math.pi);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: pulseValue * 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: pulseValue * 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // İkon placeholder
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: pulseValue * 0.4),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Başlık placeholder
+                      Container(
+                        width: 80,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: pulseValue * 0.3),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Alt metin placeholder
+                      Container(
+                        width: 50,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: pulseValue * 0.2),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

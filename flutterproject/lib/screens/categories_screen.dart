@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
@@ -10,6 +11,8 @@ import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
 import 'groups_screen.dart';
 import 'letter_groups_screen.dart';
+import 'reading_texts_selection_screen.dart';
+import 'reading_development_screen.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -24,7 +27,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   final CurrentSessionService _sessionService = CurrentSessionService();
   final ScrollController _scrollController = ScrollController();
   String? _errorMessage;
-  String? _studentId; // dispose() için saklanıyor (context'e ihtiyaç duymadan kullanmak için)
+  String? _studentId;
   
 
   // Renk paleti (görseldeki renklere göre)
@@ -45,7 +48,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     Icons.draw, // Çizgi Çalışmaları - yatay çubuklar
   ];
 
-  // Animasyon controller'ları
+  // Animasyon controller'ları (uzay teması için)
   late AnimationController _planet1Controller;
   late AnimationController _planet2Controller;
   late AnimationController _planet3Controller;
@@ -75,10 +78,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
       vsync: this,
     )..repeat();
     
-    _initializeSession();
-    // Cache-first: Provider'dan kategorileri yükle (anında gösterir)
+    // Cache-first: Provider'dan kategorileri yükle (anında gösterir - öncelikli)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCategoriesFromProvider();
+    });
+    
+    // Session ve statistics işlemlerini arka plana al (non-blocking)
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _initializeSession();
+      }
     });
   }
 
@@ -89,27 +98,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     _planet2Controller.dispose();
     _planet3Controller.dispose();
     _planet4Controller.dispose();
-    // Async işlemi await etmeden başlat (dispose async olamaz)
     _endSessionOnDispose();
     super.dispose();
   }
 
   Future<void> _initializeSession() async {
+    if (!mounted) return;
+    
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
     final selectedStudent = studentSelectionProvider.selectedStudent;
     
     if (selectedStudent == null) return;
     
-    // dispose() için studentId'yi sakla
     _studentId = selectedStudent.id;
 
     try {
-      // Oturum başlat
-      final result = await _statisticsService.startSession(selectedStudent.id);
+      final result = await _statisticsService.startSession(selectedStudent.id)
+          .timeout(const Duration(seconds: 3), onTimeout: () {
+        return {'success': false};
+      });
+      
       if (!mounted) return;
+      
       if (result['success'] == true && result['session'] != null) {
-        // İstatistikleri yükle (bugünkü süre için)
-        await _loadStatistics(selectedStudent.id);
+        _loadStatistics(selectedStudent.id);
       }
     } catch (e) {
       debugPrint('Oturum başlatma hatası: $e');
@@ -117,20 +129,23 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   }
 
   Future<void> _loadStatistics(String studentId) async {
+    if (!mounted) return;
+    
     try {
-      await _statisticsService.getStudentStatistics(studentId);
+      await _statisticsService.getStudentStatistics(studentId)
+          .timeout(const Duration(seconds: 3));
+      
       if (!mounted) return;
-      // İstatistikler yüklendi, ActivityTimer otomatik başlayacak
+    } on TimeoutException {
+      debugPrint('İstatistik yükleme timeout - sessizce devam ediliyor');
     } catch (e) {
       debugPrint('İstatistik yükleme hatası: $e');
     }
   }
 
-  // ActivityTimer callback - süre güncellendiğinde çağrılır
   void _onTimerUpdate(Duration duration, bool isRunning) {
     if (!mounted) return;
     
-    // CurrentSessionService'e güncelle
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
     final selectedStudent = studentSelectionProvider.selectedStudent;
     if (selectedStudent != null) {
@@ -139,44 +154,47 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   }
 
   Future<void> _endSessionOnDispose() async {
-    // dispose() içinde context kullanılamaz, bu yüzden saklanan _studentId'yi kullan
     final studentId = _studentId;
     
     if (studentId == null) return;
 
     try {
-      // Sadece oturumu bitir, email gönderme işlemi öğretmen tarafından yapılacak
       await _statisticsService.endSession(studentId);
     } catch (e) {
       debugPrint('Oturum bitirme hatası: $e');
     }
   }
 
-  /// Cache-First: Provider'dan kategorileri yükle (Zero-Loading UI)
   Future<void> _loadCategoriesFromProvider() async {
     if (!mounted) return;
     
     final contentProvider = Provider.of<ContentProvider>(context, listen: false);
     
-    // Provider'dan cache'lenmiş veriyi kontrol et
     if (contentProvider.categories != null && contentProvider.categories!.isNotEmpty) {
-      // Cache'de veri var, anında göster (loading yok!)
-      setState(() {
-        _errorMessage = null;
-      });
-      // Arka planda refresh yapılacak (Provider içinde)
+      if (mounted) {
+        setState(() {
+          _errorMessage = null;
+        });
+      }
       return;
     }
     
-    // Cache yoksa yükle (ilk açılış)
     try {
-      await contentProvider.loadCategories();
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = null;
+      await contentProvider.loadCategories()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        return;
       });
+      
+      if (!mounted) return;
+      
+      if (mounted) {
+        setState(() {
+          _errorMessage = null;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
+      
       String errorMsg = e.toString().replaceAll('Exception: ', '');
       if (errorMsg.contains('500') || errorMsg.contains('Sunucu hatası')) {
         errorMsg = 'Sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.';
@@ -187,9 +205,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
       } else if (errorMsg.contains('404')) {
         errorMsg = 'Kategoriler bulunamadı.';
       }
-      setState(() {
-        _errorMessage = errorMsg;
-      });
+      
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMsg;
+        });
+      }
     }
   }
 
@@ -199,102 +220,56 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false); // listen: false - gereksiz rebuild'i önle
-    final contentProvider = Provider.of<ContentProvider>(context, listen: false); // listen: false - sadece veri okuma için
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
     final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
     final selectedStudent = studentSelectionProvider.selectedStudent;
     
-    // Cache-First: Provider'dan kategorileri al (anında gösterilir)
     final categories = contentProvider.categories ?? [];
 
     return Scaffold(
       body: Stack(
         children: [
-          // Arka plan - koyu mavi-gri (solid)
+          // Uzay temalı arka plan - Deep Purple gradient
           Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF2C3E50), // Koyu mavi-gri
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF4A00E0), // Deep Purple açık
+                  const Color(0xFF8E2DE2), // Deep Purple orta
+                  const Color(0xFF2D1B69), // Deep Purple koyu
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Yıldızlar ve gezegenler
+                _buildBackgroundDecorations(),
+              ],
             ),
           ),
           // Ana içerik
           SafeArea(
             child: _errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.error_outline,
-                              color: Colors.white,
-                              size: 64,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 24),
-                            ElevatedButton(
-                              onPressed: _loadCategoriesFromProvider,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF4834D4),
-                              ),
-                              child: const Text('Tekrar Dene'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : CustomScrollView(
-                        controller: _scrollController,
-                        slivers: [
-                          // Üst Header (Pembe gradient bar) - Scroll'da gizlenir
-                          SliverAppBar(
-                            expandedHeight: 180,
-                            floating: false,
-                            pinned: false,
-                            snap: false,
-                            backgroundColor: Colors.transparent,
-                            elevation: 0,
-                            flexibleSpace: FlexibleSpaceBar(
-                              background: _buildTopHeader(selectedStudent, authProvider),
-                            ),
-                          ),
-                          // Ana içerik - Cache-First: Anında gösterilir
-                          SliverPadding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: MediaQuery.of(context).size.width * 0.04, // Responsive padding (~12-16px)
-                              vertical: MediaQuery.of(context).size.height * 0.02, // Responsive padding (~16px)
-                            ),
-                            sliver: categories.isEmpty
-                                ? SliverToBoxAdapter(
-                                    child: contentProvider.isRefreshingCategories
-                                        ? _buildSkeletonLoading()
-                                        : _buildEmptyState(),
-                                  )
-                                : SliverGrid(
-                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 3, // 3 sütun (web sitesindeki gibi)
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                      childAspectRatio: MediaQuery.of(context).size.width < 400 ? 0.8 : 0.85, // Küçük ekranlarda daha kompakt
-                                    ),
-                                    delegate: SliverChildBuilderDelegate(
-                                      (context, index) {
-                                        return _buildCategoryCard(categories[index], index);
-                                      },
-                                      childCount: categories.length,
-                                    ),
-                                  ),
+                    ? _buildErrorState()
+                    : Column(
+                        children: [
+                          // Üst Header
+                          _buildTopHeader(selectedStudent, authProvider),
+                          // Kategoriler Grid
+                          Expanded(
+                            child: categories.isEmpty
+                                ? (contentProvider.isRefreshingCategories
+                                    ? _buildSkeletonLoading()
+                                    : _buildEmptyState())
+                                : _buildCategoriesGrid(categories),
                           ),
                         ],
                       ),
           ),
-          // Alt navigasyon bar (sabit)
+          // Alt navigasyon bar
           Positioned(
             left: 0,
             right: 0,
@@ -306,134 +281,483 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     );
   }
 
-  Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              const Color(0xFFE91E63), // Açık pembe
-              const Color(0xFF9C27B0), // Mor
-            ],
-          ),
-        ),
-        child: Row(
-          children: [
-            // Geri butonu
-            Container(
-              width: 40,
-              height: 40,
+  /// Uzay temalı arka plan dekorasyonları
+  Widget _buildBackgroundDecorations() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    return Stack(
+      children: [
+        // Yıldızlar
+        ...List.generate(40, (index) {
+          return Positioned(
+            key: ValueKey('star_$index'),
+            left: (index * 37.7) % screenWidth,
+            top: (index * 23.3) % screenHeight,
+            child: Container(
+              width: 2 + (index % 4 == 0 ? 1.5 : 0),
+              height: 2 + (index % 4 == 0 ? 1.5 : 0),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: Colors.white.withValues(alpha: 0.7 + (index % 3) * 0.1),
                 shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                onPressed: () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.of(context).pop();
-                  } else {
-                    Navigator.of(context).pushReplacementNamed('/student-selection');
-                  }
-                },
-                padding: EdgeInsets.zero,
+                boxShadow: index % 5 == 0 ? [
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    blurRadius: 3,
+                    spreadRadius: 1,
+                  ),
+                ] : null,
               ),
             ),
-            // Öğrenci bilgisi ve sağ taraftaki bilgiler
-            const SizedBox(width: 12),
-            // Sol: Öğrenci bilgisi (web sitesindeki gibi)
-            if (selectedStudent != null)
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFE91E63),
-                            const Color(0xFFAD1457),
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          selectedStudent.firstName.isNotEmpty
-                              ? selectedStudent.firstName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            selectedStudent.fullName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Consumer<UserProfileProvider>(
-                            builder: (context, userProfileProvider, _) => Text(
-                              userProfileProvider.classroom?.name ?? 'Sınıf',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+          );
+        }),
+        // Gezegen 1 (Turuncu - sol üst)
+        AnimatedBuilder(
+          key: const ValueKey('planet1'),
+          animation: _planet1Controller,
+          builder: (context, child) {
+            final time = _planet1Controller.value * 2 * math.pi;
+            return Positioned(
+              left: -60.0 + 30.0 * math.sin(time),
+              top: 80.0 + 40.0 * math.cos(time),
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.deepOrange.withValues(alpha: 0.6),
+                      Colors.orange.withValues(alpha: 0.3),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                      blurRadius: 30,
+                      spreadRadius: 5,
                     ),
                   ],
                 ),
               ),
-            const SizedBox(width: 12),
-            // ActivityTimer Widget (Çocuklar için büyük ve çekici)
-            ActivityTimer(
-              onTimerUpdate: _onTimerUpdate,
-            ),
-            // Öğrenci Değiştir butonu
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).pushReplacementNamed('/student-selection');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2ECC71), // Yeşil
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            );
+          },
+        ),
+        // Gezegen 2 (Sarı - sağ üst)
+        AnimatedBuilder(
+          key: const ValueKey('planet2'),
+          animation: _planet2Controller,
+          builder: (context, child) {
+            final time = _planet2Controller.value * 2 * math.pi;
+            return Positioned(
+              right: -30.0 + 35.0 * math.sin(time * 0.8),
+              top: 150.0 + 50.0 * math.cos(time * 0.8),
+              child: Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.amber.withValues(alpha: 0.6),
+                      Colors.yellow.withValues(alpha: 0.3),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.yellow.withValues(alpha: 0.3),
+                      blurRadius: 25,
+                      spreadRadius: 4,
+                    ),
+                  ],
                 ),
               ),
-              icon: const Icon(Icons.arrow_forward, size: 14),
-              label: const Text(
-                'Öğrenci Değiştir',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+            );
+          },
+        ),
+        // Gezegen 3 (Pembe - sol alt)
+        AnimatedBuilder(
+          key: const ValueKey('planet3'),
+          animation: _planet3Controller,
+          builder: (context, child) {
+            final time = _planet3Controller.value * 2 * math.pi;
+            return Positioned(
+              left: 30.0 + 40.0 * math.sin(time * 1.2),
+              bottom: 120.0 + 45.0 * math.cos(time * 1.2),
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.pink.withValues(alpha: 0.5),
+                      Colors.red.withValues(alpha: 0.3),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
+              ),
+            );
+          },
+        ),
+        // Gezegen 4 (Cyan - sağ alt)
+        AnimatedBuilder(
+          key: const ValueKey('planet4'),
+          animation: _planet4Controller,
+          builder: (context, child) {
+            final time = _planet4Controller.value * 2 * math.pi;
+            return Positioned(
+              right: 20.0 + 30.0 * math.sin(time * 0.9),
+              bottom: 180.0 + 35.0 * math.cos(time * 0.9),
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.cyan.withValues(alpha: 0.5),
+                      Colors.blue.withValues(alpha: 0.3),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.cyan.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFE91E63).withValues(alpha: 0.9), // Pembe
+            const Color(0xFF9C27B0).withValues(alpha: 0.85), // Mor
+          ],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Geri butonu
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushReplacementNamed('/student-selection');
+                }
+              },
+              padding: EdgeInsets.zero,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Öğrenci bilgisi
+          if (selectedStudent != null)
+            Expanded(
+              child: Row(
+                children: [
+                  // Avatar
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.3),
+                          Colors.white.withValues(alpha: 0.1),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        selectedStudent.firstName.isNotEmpty
+                            ? selectedStudent.firstName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // İsim ve sınıf
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          selectedStudent.fullName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Consumer<UserProfileProvider>(
+                          builder: (context, userProfileProvider, _) => Text(
+                            userProfileProvider.classroom?.name ?? 'Sınıf',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(width: 8),
+          // Timer
+          ActivityTimer(
+            onTimerUpdate: _onTimerUpdate,
+          ),
+          const SizedBox(width: 8),
+          // Öğrenci Değiştir butonu
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF2ECC71),
+                  const Color(0xFF27AE60),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2ECC71).withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  Navigator.of(context).pushReplacementNamed('/student-selection');
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.swap_horiz, size: 14, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text(
+                        'Değiştir',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoriesGrid(List<Category> categories) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+      child: Container(
+        // Glassmorphism kapsayıcı
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.15),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.85,
+            ),
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              return _buildCategoryCard(categories[index], index);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryCard(Category category, int index) {
+    final color = _getCategoryColor(index);
+    final icon = _categoryIcons[index % _categoryIcons.length];
+
+    return GestureDetector(
+      onTap: () {
+        final categoryNameLower = category.name.toLowerCase();
+        
+        if (categoryNameLower.contains('harf') || 
+            categoryNameLower.contains('letter')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => LetterGroupsScreen(category: category),
+            ),
+          );
+        } 
+        else if (categoryNameLower.contains('kademeli') || 
+                 categoryNameLower.contains('öğrenme') ||
+                 categoryNameLower.contains('ogrenme') ||
+                 categoryNameLower.contains('progressive')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const ReadingTextsSelectionScreen(),
+            ),
+          );
+        }
+        else if (categoryNameLower.contains('okuma') || 
+                 categoryNameLower.contains('reading') ||
+                 categoryNameLower.contains('metin') ||
+                 categoryNameLower.contains('geliştirme') ||
+                 categoryNameLower.contains('gelistirme')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ReadingDevelopmentScreen(category: category),
+            ),
+          );
+        }
+        else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => GroupsScreen(category: category),
+            ),
+          );
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          // Glassmorphism kart
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Kategori İkonu
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    color,
+                    color.withValues(alpha: 0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Kategori İsmi
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                category.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -442,35 +766,145 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     );
   }
 
-  /// Skeleton Loading (CircularProgressIndicator yerine)
+  Widget _buildBottomNavigation() {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF2D1B69).withValues(alpha: 0.95),
+            const Color(0xFF1A0F40),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // Ana Sayfa (aktif)
+          _buildNavItem(
+            icon: Icons.home_rounded,
+            label: 'Ana Sayfa',
+            isActive: true,
+            onTap: () {},
+          ),
+          // İstatistikler
+          _buildNavItem(
+            icon: Icons.bar_chart_rounded,
+            label: 'İstatistikler',
+            isActive: false,
+            onTap: () => Navigator.of(context).pushNamed('/statistics'),
+          ),
+          // Notlar
+          _buildNavItem(
+            icon: Icons.note_alt_rounded,
+            label: 'Notlar',
+            isActive: false,
+            onTap: () => Navigator.of(context).pushNamed('/teacher-notes'),
+          ),
+          // Profil
+          _buildNavItem(
+            icon: Icons.person_rounded,
+            label: 'Profil',
+            isActive: false,
+            onTap: () => Navigator.of(context).pushNamed('/teacher-profile'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: isActive
+              ? BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      const Color(0xFFE91E63).withValues(alpha: 0.3),
+                      const Color(0xFFE91E63).withValues(alpha: 0.1),
+                    ],
+                  ),
+                )
+              : null,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isActive 
+                    ? const Color(0xFFE91E63) 
+                    : Colors.white.withValues(alpha: 0.7),
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive 
+                      ? const Color(0xFFE91E63) 
+                      : Colors.white.withValues(alpha: 0.7),
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSkeletonLoading() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: GridView.builder(
+        padding: const EdgeInsets.all(16),
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: MediaQuery.of(context).size.width < 400 ? 0.8 : 0.85, // Küçük ekranlarda daha kompakt
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.85,
         ),
-        itemCount: 6, // 6 skeleton kart göster
+        itemCount: 6,
         itemBuilder: (context, index) {
           return Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -478,17 +912,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                   width: 60,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(5),
                   ),
                 ),
               ],
@@ -500,272 +925,100 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.08), // Responsive padding (~30px)
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16), // Standart BorderRadius
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.category_outlined,
-            size: MediaQuery.of(context).size.width * 0.15, // Responsive icon size (~56px)
-            color: Colors.white.withValues(alpha: 0.5),
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.2),
+            width: 1,
           ),
-          SizedBox(height: MediaQuery.of(context).size.height * 0.02), // Responsive spacing (~16px)
-          Text(
-            'Henüz kategori eklenmemiş',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: MediaQuery.of(context).size.width * 0.04, // Responsive font size (~14-15px)
-              fontWeight: FontWeight.w400,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.category_outlined,
+              size: 64,
+              color: Colors.white.withValues(alpha: 0.5),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildCategoryCard(Category category, int index) {
-    final color = _getCategoryColor(index);
-    final icon = _categoryIcons[index % _categoryIcons.length];
-
-    return GestureDetector(
-      onTap: () {
-        // "Harf Grupları" kategorisi için özel ekran, diğerleri için normal gruplar ekranı
-        if (category.name.toLowerCase().contains('harf') || 
-            category.name.toLowerCase().contains('letter')) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => LetterGroupsScreen(category: category),
+            const SizedBox(height: 16),
+            Text(
+              'Henüz kategori eklenmemiş',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
             ),
-          );
-        } else {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => GroupsScreen(category: category),
-          ),
-        );
-        }
-      },
-      child: AspectRatio(
-        aspectRatio: 1.0,
-        child: Container(
-          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.035), // Responsive padding (~10-14px)
-          decoration: BoxDecoration(
-            color: const Color(0xFF2C2C2C), // Koyu gri (web sitesindeki gibi)
-            borderRadius: BorderRadius.circular(16), // Standart BorderRadius
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Kategori İkonu - Responsive boyutlandırma
-              Container(
-                width: MediaQuery.of(context).size.width * 0.11, // ~44px küçük ekranlarda
-                height: MediaQuery.of(context).size.width * 0.11,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(12), // Standart BorderRadius
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: MediaQuery.of(context).size.width * 0.055, // ~22px küçük ekranlarda
-                ),
-              ),
-              SizedBox(height: MediaQuery.of(context).size.height * 0.012), // Responsive spacing (~8px)
-              // Kategori İsmi
-              Expanded(
-                child: Text(
-                  category.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              // Alt başlık (varsa - örn: "hece-kelime-cümle")
-              if (category.description != null && category.description!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  category.description!,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBottomNavigation() {
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.black,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          // Ana Sayfa (aktif - pembe gradient)
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                // Zaten bu sayfadayız
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFFE91E63),
-                      const Color(0xFFAD1457),
-                    ],
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.home,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Ana Sayfa',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+  Widget _buildErrorState() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.white,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFFE91E63),
+                    const Color(0xFF9C27B0),
                   ],
                 ),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-          ),
-          // İstatistikler
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushNamed('/statistics');
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.bar_chart,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'İstatistikler',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _loadCategoriesFromProvider,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: Text(
+                      'Tekrar Dene',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-          // Notlar
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushNamed('/teacher-notes');
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.note_outlined,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Notlar',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Profil
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushNamed('/teacher-profile');
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Profil',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-

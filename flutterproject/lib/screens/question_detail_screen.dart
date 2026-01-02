@@ -8,6 +8,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
+import '../services/activity_progress_service.dart';
 import '../providers/student_selection_provider.dart';
 import '../widgets/activity_timer.dart';
 import 'letter_find_screen.dart';
@@ -47,6 +48,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
   bool _introAudioPlaying = false;
   StreamSubscription? _playerCompleteSubscription;
   final CurrentSessionService _sessionService = CurrentSessionService();
+  final ActivityProgressService _progressService = ActivityProgressService();
   DateTime? _activityStartTime;
   Duration _totalSessionDuration = Duration.zero; // Toplam oturum süresi
   
@@ -320,6 +322,16 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
             isCompleted: true, // Aktivite başarıyla tamamlandı
             correctAnswerCount: _score, // Doğru cevap sayısı
           );
+          
+          // Kademeli kilit sistemi için ilerlemeyi kaydet
+          final letter = ActivityProgressService.extractLetterFromTitle(widget.activity.title);
+          if (letter.isNotEmpty) {
+            _progressService.markActivityCompleted(
+              studentId: selectedStudent.id,
+              letter: letter,
+              activityId: widget.activity.id,
+            );
+          }
         }
         
         // Tüm sorular bitti
@@ -367,10 +379,10 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> with Ticker
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3).withOpacity(0.1),
+                  color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(
-                    color: const Color(0xFF2196F3).withOpacity(0.3),
+                    color: const Color(0xFF2196F3).withValues(alpha: 0.3),
                     width: 2,
                   ),
                 ),

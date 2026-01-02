@@ -201,7 +201,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         
         // İstatistikleri yenile (cache-first)
         await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
-        await statisticsProvider.loadStatistics(selectedStudent.id, forceRefresh: true);
       } else {
         throw Exception(result['message'] ?? 'Email gönderilemedi.');
       }
@@ -342,7 +341,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
+                                        color: Colors.black.withOpacity(0.1),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -418,7 +417,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF9B59B6).withValues(alpha: 0.3),
+                                      color: const Color(0xFF9B59B6).withOpacity(0.3),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -449,7 +448,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                             Text(
                                               _formatSessionStartTime(sessionStartTime),
                                               style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.9),
+                                                color: Colors.white.withOpacity(0.9),
                                                 fontSize: 12,
                                               ),
                                             ),
@@ -473,7 +472,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
+                                        color: Colors.black.withOpacity(0.1),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -566,7 +565,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                                     vertical: 6,
                                                   ),
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFF9B59B6).withValues(alpha: 0.1),
+                                                    color: const Color(0xFF9B59B6).withOpacity(0.1),
                                                     borderRadius: BorderRadius.circular(8),
                                                   ),
                                                   child: Text(
@@ -594,7 +593,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
+                                        color: Colors.black.withOpacity(0.1),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -634,7 +633,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                           color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
+                              color: Colors.black.withOpacity(0.1),
                               blurRadius: 10,
                               offset: const Offset(0, -4),
                             ),

@@ -10,6 +10,7 @@ import '../models/mini_question_model.dart';
 import '../models/activity_model.dart';
 import '../config/api_config.dart';
 import '../services/current_session_service.dart';
+import '../services/activity_progress_service.dart';
 import '../providers/student_selection_provider.dart';
 
 // Gruplanmış soru modeli (her sayfa için 3 resim)
@@ -46,6 +47,7 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
   bool _showCongratulations = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
   final CurrentSessionService _sessionService = CurrentSessionService();
+  final ActivityProgressService _progressService = ActivityProgressService();
   DateTime? _activityStartTime;
   
   // Gruplanmış sorular (her sayfa için 3 resim)
@@ -420,6 +422,16 @@ class _LetterVisualFindingScreenState extends State<LetterVisualFindingScreen> w
             isCompleted: true, // Aktivite başarıyla tamamlandı
             correctAnswerCount: correctCount, // Doğru cevap sayısı
           );
+          
+          // Kademeli kilit sistemi için ilerlemeyi kaydet
+          final letter = ActivityProgressService.extractLetterFromTitle(widget.activity.title);
+          if (letter.isNotEmpty) {
+            _progressService.markActivityCompleted(
+              studentId: selectedStudent.id,
+              letter: letter,
+              activityId: widget.activity.id,
+            );
+          }
         }
         
         Future.delayed(const Duration(seconds: 1), () {

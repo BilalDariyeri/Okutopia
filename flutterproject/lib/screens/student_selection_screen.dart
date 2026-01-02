@@ -687,6 +687,7 @@ class _StudentSelectionScreenState extends State<StudentSelectionScreen> with Ti
           onPressed: () async {
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.logout();
+            if (!mounted) return;
             final studentSelectionProvider = Provider.of<StudentSelectionProvider>(context, listen: false);
             await studentSelectionProvider.clearAll();
             if (!mounted) return;

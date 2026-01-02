@@ -238,13 +238,20 @@ class _LetterGroupsScreenState extends State<LetterGroupsScreen> with TickerProv
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // Harf seçildiğinde aktiviteler ekranına git
+          // Harf seçildiğinde aktiviteler ekranına git (hızlı navigation)
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => LetterActivitiesScreen(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => LetterActivitiesScreen(
                 letter: letter['lower']!,
                 letterUpper: letter['upper']!,
               ),
+              transitionDuration: const Duration(milliseconds: 200), // Daha hızlı geçiş
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: child,
+                );
+              },
             ),
           );
         },

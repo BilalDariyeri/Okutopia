@@ -63,6 +63,33 @@ class CurrentSessionService {
     _sessionData[studentId]!.add(activity);
   }
 
+  /// Okuma metni ekle (okuma metni tamamlandığında)
+  void addReadingText({
+    required String studentId,
+    required String readingTextId,
+    required String readingTextTitle,
+    required int durationSeconds,
+    required int wordCount, // Okunan kelime sayısı
+  }) {
+    if (!_sessionData.containsKey(studentId)) {
+      // Oturum başlatılmamışsa başlat
+      startSession(studentId);
+    }
+
+    // Okuma metnini aktivite olarak ekle (özel format)
+    final activity = SessionActivity(
+      activityId: readingTextId,
+      activityTitle: readingTextTitle,
+      durationSeconds: durationSeconds,
+      completedAt: DateTime.now(),
+      successStatus: '$wordCount kelime okundu',
+      isCompleted: true, // Okuma metni tamamlandı
+      correctAnswerCount: wordCount, // Kelime sayısı
+    );
+
+    _sessionData[studentId]!.add(activity);
+  }
+
   /// Oturum verilerini getir
   List<SessionActivity> getSessionActivities(String studentId) {
     return _sessionData[studentId] ?? [];

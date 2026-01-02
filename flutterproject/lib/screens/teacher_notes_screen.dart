@@ -32,10 +32,8 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
   };
 
   List<TeacherNote> _notes = [];
-  Map<String, dynamic>? _lastEmail;
   bool _isLoading = false;
   bool _isSaving = false;
-  bool _isEmailExpanded = false;
   bool _showNewNoteDialog = false;
   final TextEditingController _titleController = TextEditingController();
   String? _selectedCategory = 'Diğer'; // Varsayılan kategori
@@ -74,23 +72,14 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
     });
 
     try {
-      // Son veli maili ve notları paralel olarak yükle
-      // Email yoksa hata vermemesi için ayrı ayrı handle ediyoruz
-      final results = await Future.wait([
-        _noteService.getLastEmailToParent(selectedStudent.id).catchError((e) {
-          // Email bulunamazsa veya hata olursa null döndür, hata fırlatma
-          return {'success': true, 'email': null};
-        }),
-        _noteService.getStudentNotes(selectedStudent.id, teacherId: userProfileProvider.user?.id),
-      ]);
-
-      final emailResult = results[0];
-      final notesResult = results[1];
+      // Notları yükle
+      final notesResult = await _noteService.getStudentNotes(
+        selectedStudent.id, 
+        teacherId: userProfileProvider.user?.id
+      );
 
       if (mounted) {
         setState(() {
-          _lastEmail = emailResult['email'] != null ? emailResult : null;
-          
           // Notları parse et
           if (notesResult['success'] == true && notesResult['notes'] != null) {
             _notes = (notesResult['notes'] as List)
@@ -213,111 +202,6 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
     }
   }
 
-  Widget _buildLastEmailCard() {
-    if (_lastEmail == null || _lastEmail!['email'] == null) {
-      return const SizedBox.shrink();
-    }
-
-    final email = _lastEmail!['email'];
-    final emailContent = email['content']?.toString() ?? email['htmlContent']?.toString() ?? '';
-    final sentAt = email['sentAt'] != null
-        ? DateTime.tryParse(email['sentAt'].toString())
-        : null;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.amber.shade200,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.email_outlined,
-                  color: Colors.amber.shade700,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Veliye Gönderilen Son Rapor',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2C2C2C),
-                        ),
-                      ),
-                      if (sentAt != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Gönderilme: ${sentAt.day}.${sentAt.month}.${sentAt.year} ${sentAt.hour.toString().padLeft(2, '0')}:${sentAt.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    _isEmailExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.amber.shade700,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isEmailExpanded = !_isEmailExpanded;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (_isEmailExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  emailContent.length > 500
-                      ? '${emailContent.substring(0, 500)}...'
-                      : emailContent,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF2C2C2C),
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildNotesList() {
     if (_notes.isEmpty) {
@@ -879,9 +763,6 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
                         )
                       : Column(
                           children: [
-                            // Son veli maili kartı
-                            _buildLastEmailCard(),
-                            
                             // Notlar listesi
                             Expanded(
                               child: SingleChildScrollView(
