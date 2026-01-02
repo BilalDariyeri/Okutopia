@@ -75,8 +75,12 @@ class _TeacherNotesScreenState extends State<TeacherNotesScreen> {
 
     try {
       // Son veli maili ve notları paralel olarak yükle
+      // Email yoksa hata vermemesi için ayrı ayrı handle ediyoruz
       final results = await Future.wait([
-        _noteService.getLastEmailToParent(selectedStudent.id),
+        _noteService.getLastEmailToParent(selectedStudent.id).catchError((e) {
+          // Email bulunamazsa veya hata olursa null döndür, hata fırlatma
+          return {'success': true, 'email': null};
+        }),
         _noteService.getStudentNotes(selectedStudent.id, teacherId: userProfileProvider.user?.id),
       ]);
 

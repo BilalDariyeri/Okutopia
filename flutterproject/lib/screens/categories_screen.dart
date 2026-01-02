@@ -7,7 +7,6 @@ import '../providers/auth_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../providers/student_selection_provider.dart';
 import '../providers/content_provider.dart';
-import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
 import 'groups_screen.dart';
 import 'package:provider/provider.dart';
@@ -509,7 +508,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
   Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -519,12 +518,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
           ),
         ),
         child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Üst satır: Geri ok ve başlık
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 onPressed: () {
                   if (Navigator.canPop(context)) {
                     Navigator.of(context).pop();
@@ -533,12 +536,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                   }
                 },
               ),
+              const SizedBox(width: 4),
               const Expanded(
                 child: Text(
                   'İçindekiler',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.2,
                   ),
@@ -546,94 +550,79 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
               ),
             ],
           ),
-          // Alt başlık
-          const Padding(
-            padding: EdgeInsets.only(left: 16, bottom: 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Eğitim materyallerine kolayca erişin',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-          ),
-          // Öğrenci bilgisi ve sağ taraftaki bilgiler
-          Row(
-            children: [
-              // Sol: Öğrenci bilgisi (web sitesindeki gibi)
-              if (selectedStudent != null)
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFFE91E63),
-                              const Color(0xFFAD1457),
-                            ],
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            selectedStudent.firstName.isNotEmpty
-                                ? selectedStudent.firstName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+          const SizedBox(height: 2),
+          // Öğrenci bilgisi - Üst satır
+          if (selectedStudent != null)
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFFE91E63),
+                        const Color(0xFFAD1457),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      selectedStudent.firstName.isNotEmpty
+                          ? selectedStudent.firstName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              selectedStudent.fullName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Consumer<UserProfileProvider>(
-                              builder: (context, userProfileProvider, _) => Text(
-                                userProfileProvider.classroom?.name ?? 'Sınıf',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedStudent.fullName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Consumer<UserProfileProvider>(
+                        builder: (context, userProfileProvider, _) => Text(
+                          userProfileProvider.classroom?.name ?? 'Sınıf',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
-              const SizedBox(width: 12),
-              // ActivityTimer Widget (Çocuklar için büyük ve çekici)
-              ActivityTimer(
+              ],
+            ),
+          const SizedBox(height: 2),
+          // Timer ve Öğrenci Değiştir butonu - Alt satır (sağa hizalı)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Kompakt Timer Widget - ActivityTimer yerine
+              _CompactTimerWidget(
                 onTimerUpdate: _onTimerUpdate,
               ),
+              const SizedBox(width: 4),
               // Öğrenci Değiştir butonu
               ElevatedButton.icon(
                 onPressed: () {
@@ -642,16 +631,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2ECC71), // Yeşil
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  minimumSize: const Size(0, 22),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                icon: const Icon(Icons.arrow_forward, size: 14),
+                icon: const Icon(Icons.arrow_forward, size: 11),
                 label: const Text(
                   'Öğrenci Değiştir',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 9,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -973,6 +963,170 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kompakt Timer Widget - ActivityTimer yerine kullanılan küçük versiyon
+class _CompactTimerWidget extends StatefulWidget {
+  final void Function(Duration duration, bool isRunning)? onTimerUpdate;
+
+  const _CompactTimerWidget({
+    this.onTimerUpdate,
+  });
+
+  @override
+  State<_CompactTimerWidget> createState() => _CompactTimerWidgetState();
+}
+
+class _CompactTimerWidgetState extends State<_CompactTimerWidget>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+  Duration _elapsedDuration = Duration.zero;
+  bool _isRunning = true;
+  bool _isPaused = false;
+  Duration _pausedDuration = Duration.zero;
+  DateTime? _lastResumeTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _lastResumeTime = DateTime.now();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        if (_isRunning && !_isPaused) {
+          _pauseTimer();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        if (!_isRunning && !_isPaused) {
+          _resumeTimer();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  void _startTimer() {
+    _isRunning = true;
+    _isPaused = false;
+    _lastResumeTime = DateTime.now();
+    
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      if (_isRunning && !_isPaused) {
+        setState(() {
+          if (_lastResumeTime != null) {
+            final now = DateTime.now();
+            final sessionDuration = now.difference(_lastResumeTime!);
+            _elapsedDuration = _pausedDuration + sessionDuration;
+          }
+        });
+        
+        widget.onTimerUpdate?.call(_elapsedDuration, _isRunning);
+      }
+    });
+  }
+
+  void _pauseTimer() {
+    if (!_isRunning || _isPaused) return;
+    
+    setState(() {
+      _isPaused = true;
+      if (_lastResumeTime != null) {
+        final now = DateTime.now();
+        final sessionDuration = now.difference(_lastResumeTime!);
+        _pausedDuration = _pausedDuration + sessionDuration;
+      }
+    });
+    
+    widget.onTimerUpdate?.call(_elapsedDuration, false);
+  }
+
+  void _resumeTimer() {
+    if (_isRunning && !_isPaused) return;
+    
+    setState(() {
+      _isPaused = false;
+      _lastResumeTime = DateTime.now();
+    });
+    
+    widget.onTimerUpdate?.call(_elapsedDuration, true);
+  }
+
+  void _toggleTimer() {
+    if (_isPaused) {
+      _resumeTimer();
+    } else {
+      _pauseTimer();
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _isPaused ? const Color(0xFF95A5A6) : const Color(0xFF4ECDC4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _formatDuration(_elapsedDuration),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _toggleTimer,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: _isPaused ? const Color(0xFF2ECC71) : const Color(0xFFE74C3C),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _isPaused ? Icons.play_arrow : Icons.pause,
+                color: Colors.white,
+                size: 12,
               ),
             ),
           ),
