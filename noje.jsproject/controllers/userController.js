@@ -1,7 +1,7 @@
 const path = require('path');
 const User = require('../models/user');
 const Classroom = require(path.resolve(__dirname, '../models/classroom'));
-const Progress = require(path.resolve(__dirname, '../models/Progress'));
+const Progress = require(path.resolve(__dirname, '../models/progress'));
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
 

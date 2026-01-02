@@ -10,7 +10,6 @@ import '../config/api_config.dart';
 import '../services/current_session_service.dart';
 import '../providers/student_selection_provider.dart';
 import '../widgets/activity_timer.dart';
-import '../utils/app_logger.dart';
 import 'letter_find_screen.dart';
 import 'letter_writing_screen.dart';
 import 'letter_drawing_screen.dart';

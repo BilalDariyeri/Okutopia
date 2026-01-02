@@ -89,3 +89,7 @@ async function findImageForSerbestCizim() {
 findImageForSerbestCizim();
 
 
+
+
+
+

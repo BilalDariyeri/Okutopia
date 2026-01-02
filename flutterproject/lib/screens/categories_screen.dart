@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/statistics_service.dart';
 import '../models/category_model.dart';
@@ -7,8 +6,10 @@ import '../providers/auth_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../providers/student_selection_provider.dart';
 import '../providers/content_provider.dart';
+import '../widgets/activity_timer.dart';
 import '../services/current_session_service.dart';
 import 'groups_screen.dart';
+import 'letter_groups_screen.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -209,24 +210,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     return Scaffold(
       body: Stack(
         children: [
-          // Arka plan
+          // Arka plan - koyu mavi-gri (solid)
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  const Color(0xFF6C5CE7), // Açık mor
-                  const Color(0xFF4834D4), // Orta mor
-                  const Color(0xFF2D1B69), // Koyu mor
-                ],
-              ),
-            ),
-            child: Stack(
-              children: [
-                // Yıldızlar ve gezegenler arka plan
-                _buildBackgroundDecorations(),
-              ],
+            decoration: const BoxDecoration(
+              color: Color(0xFF2C3E50), // Koyu mavi-gri
             ),
           ),
           // Ana içerik
@@ -304,10 +291,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                                     ),
                                   ),
                           ),
-                          // Alt navigasyon için boşluk
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 70),
-                          ),
                         ],
                       ),
           ),
@@ -323,211 +306,32 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
     );
   }
 
-  Widget _buildBackgroundDecorations() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    
-    return Stack(
-      children: [
-        // Yıldızlar (statik)
-        ...List.generate(30, (index) {
-          return Positioned(
-            key: ValueKey('star_$index'),
-            left: (index * 37.7) % screenWidth,
-            top: (index * 23.3) % screenHeight,
-            child: Container(
-              width: 2 + (index % 3 == 0 ? 1 : 0),
-              height: 2 + (index % 3 == 0 ? 1 : 0),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                shape: BoxShape.circle,
-                boxShadow: index % 5 == 0 ? [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    blurRadius: 2,
-                    spreadRadius: 0.5,
-                  ),
-                ] : null,
-              ),
-            ),
-          );
-        }),
-        // Gezegenler (optimize edilmiş)
-        AnimatedBuilder(
-          key: const ValueKey('planet1'),
-          animation: _planet1Controller,
-          builder: (context, child) {
-            final time = _planet1Controller.value * 2 * math.pi;
-            final baseX = -50.0;
-            final baseY = 50.0;
-            final radiusX = 25.0;
-            final radiusY = 35.0;
-            
-            return Positioned(
-              left: baseX + radiusX * math.sin(time),
-              top: baseY + radiusY * math.cos(time),
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.deepOrange.withValues(alpha: 0.5),
-                      Colors.orange.withValues(alpha: 0.3),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withValues(alpha: 0.3),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        AnimatedBuilder(
-          key: const ValueKey('planet2'),
-          animation: _planet2Controller,
-          builder: (context, child) {
-            final time = _planet2Controller.value * 2 * math.pi;
-            final screenWidth = MediaQuery.of(context).size.width;
-            final baseX = screenWidth + 30.0;
-            final baseY = 100.0;
-            final radiusX = 30.0;
-            final radiusY = 45.0;
-            
-            return Positioned(
-              right: screenWidth - (baseX - radiusX * math.sin(time * 0.8)),
-              top: baseY + radiusY * math.cos(time * 0.8),
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.amber.withValues(alpha: 0.5),
-                      Colors.yellow.withValues(alpha: 0.3),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.yellow.withValues(alpha: 0.3),
-                      blurRadius: 25,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        AnimatedBuilder(
-          key: const ValueKey('planet3'),
-          animation: _planet3Controller,
-          builder: (context, child) {
-            final time = _planet3Controller.value * 2 * math.pi;
-            final screenHeight = MediaQuery.of(context).size.height;
-            final baseX = 50.0;
-            final baseY = screenHeight - 100.0;
-            final radiusX = 35.0;
-            final radiusY = 40.0;
-            
-            return Positioned(
-              left: baseX + radiusX * math.sin(time * 1.2),
-              bottom: screenHeight - (baseY - radiusY * math.cos(time * 1.2)),
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.pink.withValues(alpha: 0.5),
-                      Colors.red.withValues(alpha: 0.3),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        AnimatedBuilder(
-          key: const ValueKey('planet4'),
-          animation: _planet4Controller,
-          builder: (context, child) {
-            final time = _planet4Controller.value * 2 * math.pi;
-            final screenWidth = MediaQuery.of(context).size.width;
-            final screenHeight = MediaQuery.of(context).size.height;
-            final baseX = screenWidth - 20.0;
-            final baseY = screenHeight - 150.0;
-            final radiusX = 25.0;
-            final radiusY = 45.0;
-            
-            return Positioned(
-              right: screenWidth - (baseX - radiusX * math.sin(time * 0.9)),
-              bottom: screenHeight - (baseY - radiusY * math.cos(time * 0.9)),
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.cyan.withValues(alpha: 0.5),
-                      Colors.blue.withValues(alpha: 0.3),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.cyan.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildTopHeader(selectedStudent, AuthProvider authProvider) {
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
             colors: [
-              const Color(0xFFE91E63), // Pembe
-              const Color(0xFFAD1457), // Koyu pembe
+              const Color(0xFFE91E63), // Açık pembe
+              const Color(0xFF9C27B0), // Mor
             ],
           ),
         ),
-        child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Üst satır: Geri ok ve başlık
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+        child: Row(
+          children: [
+            // Geri butonu
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
                 onPressed: () {
                   if (Navigator.canPop(context)) {
                     Navigator.of(context).pop();
@@ -535,120 +339,104 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                     Navigator.of(context).pushReplacementNamed('/student-selection');
                   }
                 },
+                padding: EdgeInsets.zero,
               ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Text(
-                  'İçindekiler',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          // Öğrenci bilgisi - Üst satır
-          if (selectedStudent != null)
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFFE91E63),
-                        const Color(0xFFAD1457),
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      selectedStudent.firstName.isNotEmpty
-                          ? selectedStudent.firstName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        selectedStudent.fullName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Consumer<UserProfileProvider>(
-                        builder: (context, userProfileProvider, _) => Text(
-                          userProfileProvider.classroom?.name ?? 'Sınıf',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w400,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
-          const SizedBox(height: 2),
-          // Timer ve Öğrenci Değiştir butonu - Alt satır (sağa hizalı)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Kompakt Timer Widget - ActivityTimer yerine
-              _CompactTimerWidget(
-                onTimerUpdate: _onTimerUpdate,
-              ),
-              const SizedBox(width: 4),
-              // Öğrenci Değiştir butonu
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/student-selection');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2ECC71), // Yeşil
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  minimumSize: const Size(0, 22),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+            // Öğrenci bilgisi ve sağ taraftaki bilgiler
+            const SizedBox(width: 12),
+            // Sol: Öğrenci bilgisi (web sitesindeki gibi)
+            if (selectedStudent != null)
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFFE91E63),
+                            const Color(0xFFAD1457),
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          selectedStudent.firstName.isNotEmpty
+                              ? selectedStudent.firstName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            selectedStudent.fullName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Consumer<UserProfileProvider>(
+                            builder: (context, userProfileProvider, _) => Text(
+                              userProfileProvider.classroom?.name ?? 'Sınıf',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                icon: const Icon(Icons.arrow_forward, size: 11),
-                label: const Text(
-                  'Öğrenci Değiştir',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w500,
-                  ),
+              ),
+            const SizedBox(width: 12),
+            // ActivityTimer Widget (Çocuklar için büyük ve çekici)
+            ActivityTimer(
+              onTimerUpdate: _onTimerUpdate,
+            ),
+            // Öğrenci Değiştir butonu
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushReplacementNamed('/student-selection');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2ECC71), // Yeşil
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-            ],
-          ),
-        ],
+              icon: const Icon(Icons.arrow_forward, size: 14),
+              label: const Text(
+                'Öğrenci Değiştir',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -748,12 +536,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
 
     return GestureDetector(
       onTap: () {
-        // Kategori seçildiğinde gruplar ekranına git
+        // "Harf Grupları" kategorisi için özel ekran, diğerleri için normal gruplar ekranı
+        if (category.name.toLowerCase().contains('harf') || 
+            category.name.toLowerCase().contains('letter')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => LetterGroupsScreen(category: category),
+            ),
+          );
+        } else {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => GroupsScreen(category: category),
           ),
         );
+        }
       },
       child: AspectRatio(
         aspectRatio: 1.0,
@@ -963,170 +760,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> with TickerProvider
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Kompakt Timer Widget - ActivityTimer yerine kullanılan küçük versiyon
-class _CompactTimerWidget extends StatefulWidget {
-  final void Function(Duration duration, bool isRunning)? onTimerUpdate;
-
-  const _CompactTimerWidget({
-    this.onTimerUpdate,
-  });
-
-  @override
-  State<_CompactTimerWidget> createState() => _CompactTimerWidgetState();
-}
-
-class _CompactTimerWidgetState extends State<_CompactTimerWidget>
-    with WidgetsBindingObserver {
-  Timer? _timer;
-  Duration _elapsedDuration = Duration.zero;
-  bool _isRunning = true;
-  bool _isPaused = false;
-  Duration _pausedDuration = Duration.zero;
-  DateTime? _lastResumeTime;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _lastResumeTime = DateTime.now();
-    _startTimer();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
-        if (_isRunning && !_isPaused) {
-          _pauseTimer();
-        }
-        break;
-      case AppLifecycleState.resumed:
-        if (!_isRunning && !_isPaused) {
-          _resumeTimer();
-        }
-        break;
-      default:
-        break;
-    }
-  }
-
-  void _startTimer() {
-    _isRunning = true;
-    _isPaused = false;
-    _lastResumeTime = DateTime.now();
-    
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      
-      if (_isRunning && !_isPaused) {
-        setState(() {
-          if (_lastResumeTime != null) {
-            final now = DateTime.now();
-            final sessionDuration = now.difference(_lastResumeTime!);
-            _elapsedDuration = _pausedDuration + sessionDuration;
-          }
-        });
-        
-        widget.onTimerUpdate?.call(_elapsedDuration, _isRunning);
-      }
-    });
-  }
-
-  void _pauseTimer() {
-    if (!_isRunning || _isPaused) return;
-    
-    setState(() {
-      _isPaused = true;
-      if (_lastResumeTime != null) {
-        final now = DateTime.now();
-        final sessionDuration = now.difference(_lastResumeTime!);
-        _pausedDuration = _pausedDuration + sessionDuration;
-      }
-    });
-    
-    widget.onTimerUpdate?.call(_elapsedDuration, false);
-  }
-
-  void _resumeTimer() {
-    if (_isRunning && !_isPaused) return;
-    
-    setState(() {
-      _isPaused = false;
-      _lastResumeTime = DateTime.now();
-    });
-    
-    widget.onTimerUpdate?.call(_elapsedDuration, true);
-  }
-
-  void _toggleTimer() {
-    if (_isPaused) {
-      _resumeTimer();
-    } else {
-      _pauseTimer();
-    }
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _isPaused ? const Color(0xFF95A5A6) : const Color(0xFF4ECDC4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _formatDuration(_elapsedDuration),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: _toggleTimer,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: _isPaused ? const Color(0xFF2ECC71) : const Color(0xFFE74C3C),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _isPaused ? Icons.play_arrow : Icons.pause,
-                color: Colors.white,
-                size: 12,
               ),
             ),
           ),

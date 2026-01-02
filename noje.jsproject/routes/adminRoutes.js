@@ -4,7 +4,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { loginLimiter } = require('../middleware/rateLimiter');
+// Rate limiter kaldırıldı
+// const { loginLimiter } = require('../middleware/rateLimiter');
 
 /**
  * @swagger
