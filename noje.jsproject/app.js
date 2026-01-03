@@ -43,20 +43,53 @@ app.disable('x-powered-by');
 // 💡 PERFORMANS: Response compression (bandwidth tasarrufu)
 app.use(compression());
 
-// 💡 GÜVENLİK: CORS yapılandırması (production'da spesifik origin'ler belirtilmeli)
+// 💡 GÜVENLİK: CORS yapılandırması
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN 
-        ? process.env.CORS_ORIGIN.split(',') // Birden fazla origin için
-        : (process.env.NODE_ENV === 'production' 
-            ? (() => {
-                // 🔒 SECURITY: Production'da CORS_ORIGIN zorunlu
-                console.error('❌ KRİTİK GÜVENLİK HATASI: Production modunda CORS_ORIGIN environment variable tanımlı değil!');
-                // Production'da varsayılan olarak boş array döndür (hiçbir origin'e izin verme)
-                return [];
-            })()
-            : true), // Development'ta tüm origin'lere izin
+    origin: function (origin, callback) {
+        // CORS_ORIGIN tanımlıysa, sadece belirtilen origin'lere izin ver
+        if (process.env.CORS_ORIGIN) {
+            const allowedOrigins = process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error('CORS policy: Origin not allowed'));
+            }
+        } else if (process.env.NODE_ENV === 'production') {
+            // Production'da varsayılan izinli origin'ler
+            const defaultAllowedOrigins = [
+                'https://otproje-production.up.railway.app',
+                // Flutter web için localhost'lara izin ver (geliştirme sırasında)
+                /^http:\/\/localhost:\d+$/,  // localhost:herhangi_bir_port
+                /^http:\/\/127\.0\.0\.1:\d+$/ // 127.0.0.1:herhangi_bir_port
+            ];
+            
+            if (!origin) {
+                // Origin yok (server-to-server request)
+                callback(null, true);
+            } else {
+                const isAllowed = defaultAllowedOrigins.some(allowed => {
+                    if (allowed instanceof RegExp) {
+                        return allowed.test(origin);
+                    }
+                    return allowed === origin;
+                });
+                
+                if (isAllowed) {
+                    callback(null, true);
+                } else {
+                    logger.warn(`CORS blocked origin: ${origin}`);
+                    callback(new Error('CORS policy: Origin not allowed'));
+                }
+            }
+        } else {
+            // Development'ta tüm origin'lere izin ver
+            callback(null, true);
+        }
+    },
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
 
