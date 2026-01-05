@@ -1,5 +1,6 @@
 // controllers/statisticsController.js - İstatistik Controller'ı
 
+const mongoose = require('mongoose');
 const StudentSession = require('../models/studentSession');
 const ReadingSession = require('../models/readingSession');
 const DailyStatistics = require('../models/dailyStatistics');
@@ -222,7 +223,8 @@ exports.endSession = async (req, res) => {
         if (sessionActivities && Array.isArray(sessionActivities) && sessionActivities.length > 0 && totalDurationSeconds !== undefined) {
             // Frontend'den gelen oturum verilerini kullan (daha doğru)
             lastSessionActivities = sessionActivities.map(activity => ({
-                activityId: activity.activityId,
+                // activityId geçerli bir ObjectId mi kontrol et, değilse null yap
+                activityId: mongoose.Types.ObjectId.isValid(activity.activityId) ? activity.activityId : null,
                 activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
                 durationSeconds: activity.durationSeconds || 0,
                 completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
@@ -958,13 +960,12 @@ ${activitiesListText}
         // Frontend'den gelen oturum verilerini kullanarak lastSessionStats'ı güncelle
         // SADECE tamamlanmış aktiviteleri kaydet
         const lastSessionActivities = completedActivities.map(activity => ({
-            activityId: activity.activityId,
+            // activityId geçerli bir ObjectId mi kontrol et, değilse null yap
+            activityId: mongoose.Types.ObjectId.isValid(activity.activityId) ? activity.activityId : null,
             activityTitle: activity.activityTitle || 'Bilinmeyen Aktivite',
             durationSeconds: activity.durationSeconds || 0,
             completedAt: activity.completedAt ? new Date(activity.completedAt) : new Date(),
-            successStatus: activity.successStatus || null,
-            isCompleted: activity.isCompleted !== false, // Tamamlanma durumu
-            correctAnswerCount: activity.correctAnswerCount || 0 // Doğru cevap sayısı
+            successStatus: activity.successStatus || null
         }));
 
         // User modelindeki lastSessionStats'ı güncelle (OVERWRITE - append değil)
